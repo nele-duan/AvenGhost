@@ -52,12 +52,30 @@ async function main() {
     ctx.sendChatAction('typing');
 
     try {
-      // Pass a callback function to handle replies
+      // Pass a callback function to handle replies and reactions
+      const reactCallback = async (emoji: string) => {
+        try {
+          // Assuming telegraf 4.16+:
+          await ctx.react(emoji as any);
+        } catch (e) {
+          console.error(`Error reacting with ${emoji}:`, e);
+        }
+      };
+
+      const imageCallback = async (url: string, caption?: string) => {
+        try {
+          await ctx.replyWithPhoto(url, { caption: caption });
+        } catch (e) {
+          console.error(`Error sending image ${url}:`, e);
+          await ctx.reply(`[Image Failed: ${url}]`);
+        }
+      };
+
       await agent.processMessage(userId, message, async (replyText) => {
         if (replyText && replyText.trim() !== "") {
-          await ctx.reply(replyText);
+          await ctx.reply(replyText, { parse_mode: 'Markdown' }); // Enable Markdown for links
         }
-      });
+      }, reactCallback, imageCallback);
     } catch (e) {
       console.error('Error processing message:', e);
       await ctx.reply('... (Static noise) ... System error ...');
