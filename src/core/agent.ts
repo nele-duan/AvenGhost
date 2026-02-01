@@ -145,7 +145,8 @@ CRITICAL INSTRUCTION:
     if (!response) return;
 
     // PARSE REACTION
-    const reactionRegex = /\[REACTION:(.+?)\]/g;
+    // Support: [REACTION:x], REACTION:x, Reaction: x
+    const reactionRegex = /\[?REACTION:\s*([^\s\]]+)\]?/gi;
     let matchReaction;
     while ((matchReaction = reactionRegex.exec(response)) !== null) {
       const emoji = matchReaction[1].trim();
@@ -154,12 +155,11 @@ CRITICAL INSTRUCTION:
     response = response.replace(reactionRegex, '').trim();
 
     // PARSE IMAGE
-    const imageRegex = /\[IMAGE:(.+?)\]/g;
+    const imageRegex = /\[?IMAGE:\s*([^\s\]]+)\]?/gi;
     let matchImage;
     while ((matchImage = imageRegex.exec(response)) !== null) {
       const url = matchImage[1].trim();
       console.log(`[Agent] Sending Image: ${url}`);
-      // Optional: Extract caption from text? For now, just send image.
       if (sendImage) await sendImage(url);
     }
     response = response.replace(imageRegex, '').trim();
@@ -190,14 +190,18 @@ CRITICAL INSTRUCTION:
       const round2Prompt = `
 ${userPayload}
 
-ASSISTANT THOUGHT (Previous Step):
-${response}
+ASSISTANT PREVIOUS MESSAGE (Already sent to user):
+${prefix || "(No text, just code)"}
 
 SYSTEM TOOL OUTPUT:
 ${toolOutput}
 
-FINAL INSTRUCTION:
-Formulate the final response to the user based on the tool output.
+CRITICAL INSTRUCTION:
+1. The user has ALREADY seen your 'PREVIOUS MESSAGE' (above).
+2. DO NOT repeat the same emotions/words from that message.
+3. Formulate a NEW response based *strictly* on the Tool Output.
+4. If the tool fixed a problem, confirm it briefly. 
+5. Keep it natural.
 `;
       let round2Response = await this.llm.chat(systemInstruction, round2Prompt);
       round2Response = round2Response ? round2Response.trim() : "";
