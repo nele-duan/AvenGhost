@@ -105,7 +105,7 @@ export class Agent {
 
     // 2. Construct System Prompt
     // Combine Soul, User Profile, and Base Personality
-    const dynamicSystemPrompt = `${soulContent}\n\n${userContent}`;
+    const dynamicSystemPrompt = `${this.defaultSystemPrompt}\n\n${soulContent}\n\n${userContent}`;
 
     // 3. Memory & Context
     await this.memory.addMessage('user', message);
@@ -131,11 +131,15 @@ CRITICAL INSTRUCTION:
 3. NO: Chat naturally.
 4. REACTION: You MUST use the hidden tag [REACTION:emoji] to react.
    INVALID: "(I react with a heart)" or "*reacts*"
-   VALID: [REACTION:❤️]
+   LIMIT: MAX 1 reaction per message. DO NOT SPAM.
    Supported Emojis: 👍, 👎, ❤️, 🔥, 🥰, 👏, 😁, 🤔, 🤯, 😱, 🤬, 😢, 🎉, 🤩, 🤮, 💩, 🙏, 🕊️, 🤡, 🥱, 🥴, 😍, 🐳, 🤝, 👨‍💻, 👀, 🌚, ⚡️, 🍌, 🏆, 💔, 🤨, 😐, 🍓, 🍾, 💋, 🖕, 😈, 😴, 😭, 🤓, 👻, 👨‍🏫, 🤝, ✍️, 🥺, 🦜,  Saturn, etc.
-   Use this liberally to show emotion!
+   Use this liberally to show emotion! (But only one).
 5. IMAGES: [IMAGE:url] (e.g. [IMAGE:https://...]).
    LINKS: [Title](url)
+6. SILENCE IS GOLDEN: If you are executing a simple task (like checking a file), output the CODE BLOCK immediately. Do NOT write a preamble like "I will check...".
+   - IF NO PREAMBLE: The user sees only the FINAL result (1 message).
+   - IF PREAMBLE: The user sees "Thinking..." then "Result" (2 messages).
+   - PREFER 1 MESSAGE for simple actions.
 `;
 
     // --- ROUND 1 ---
@@ -146,9 +150,14 @@ CRITICAL INSTRUCTION:
     // Matches: [REACTION:x], REACTION:x, Reaction: x, with or without brackets
     const reactionRegex = /(?:\[\s*)?REACTION\s*:\s*([^\s\]]+)(?:\s*\])?/gi;
     let matchReaction;
+    let hasReacted = false; // Limit to 1 reaction per turn
+
     while ((matchReaction = reactionRegex.exec(response)) !== null) {
       const emoji = matchReaction[1].trim();
-      if (sendReaction) await sendReaction(emoji);
+      if (sendReaction && !hasReacted) {
+        await sendReaction(emoji);
+        hasReacted = true;
+      }
     }
     response = response.replace(reactionRegex, '').trim();
 
@@ -209,6 +218,26 @@ CRITICAL INSTRUCTION:
 `;
       let round2Response = await this.llm.chat(systemInstruction, round2Prompt);
       round2Response = round2Response ? round2Response.trim() : "";
+
+      // --- CLEAN ROUND 2 ("Information Filtering") ---
+      // Apply the same cleaning logic to the final response
+      // Reuse regex (lastIndex is not an issue with match loop/replace)
+
+      while ((matchReaction = reactionRegex.exec(round2Response)) !== null) {
+        const emoji = matchReaction[1].trim();
+        if (sendReaction && !hasReacted) {
+          await sendReaction(emoji);
+          hasReacted = true;
+        }
+      }
+      round2Response = round2Response.replace(reactionRegex, '').trim();
+
+      while ((matchImage = imageRegex.exec(round2Response)) !== null) {
+        const url = matchImage[1].trim();
+        if (sendImage) await sendImage(url);
+      }
+      round2Response = round2Response.replace(imageRegex, '').trim();
+      // -----------------------------------------------
 
       if (round2Response) {
         await sendReply(round2Response);
