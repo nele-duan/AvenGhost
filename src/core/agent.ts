@@ -109,7 +109,7 @@ export class Agent {
 
     // 3. Memory & Context
     await this.memory.addMessage('user', message);
-    const contextStr = await this.memory.getContext();
+    let contextStr = await this.memory.getContext();
 
     // 4. Prompt Construction
     const systemInstruction = `${dynamicSystemPrompt}
