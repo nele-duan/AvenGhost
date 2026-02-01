@@ -65,7 +65,9 @@ async function main() {
   });
 
   // 4. Start Heartbeat (Autonomy)
-  const heartbeat = new HeartbeatSystem(agent);
+  const heartbeat = new HeartbeatSystem(agent, async (chatId, text) => {
+    await bot.telegram.sendMessage(chatId, text);
+  });
   heartbeat.start();
 
   // 5. Launch Bot

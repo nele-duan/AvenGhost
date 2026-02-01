@@ -2,11 +2,18 @@ import { Agent } from './agent';
 
 export class HeartbeatSystem {
   private agent: Agent;
+  private sendMessage: (chatId: string, text: string) => Promise<any>;
   private intervalId: NodeJS.Timeout | null = null;
   private intervalMs: number;
+  private lastSpeaker: string = "system";
 
-  constructor(agent: Agent, intervalMs: number = 60000) { // Default 1 min check
+  constructor(
+    agent: Agent,
+    sendMessage: (chatId: string, text: string) => Promise<any>,
+    intervalMs: number = 60000
+  ) { // Default 1 min check
     this.agent = agent;
+    this.sendMessage = sendMessage;
     this.intervalMs = intervalMs;
   }
 
@@ -24,18 +31,48 @@ export class HeartbeatSystem {
     }
   }
 
+  private lastTriggerTime: number = Date.now();
+
   private async tick() {
     const now = new Date();
     const hour = now.getHours();
 
-    // Simple logic for now: 
-    // 1. Check if user hasn't spoken in X hours? (Need access to memory via agent)
-    // 2. Is it a special time (morning/night)?
+    // 1. Time Window Override: Only active 09:00 - 22:00
+    if (hour < 9 || hour > 22) {
+      return;
+    }
 
-    // Example: Random proactive thought
-    if (Math.random() < 0.05) { // 5% chance per minute to check triggers
-      console.log('[Heartbeat] Proactive check triggered...');
-      // This would call agent.proactiveThink() or similar
+    // 2. Interval Check: Approx every 2 hours (with slight jitter for natural feel)
+    const elapsed = now.getTime() - this.lastTriggerTime;
+    const targetInterval = 2 * 60 * 60 * 1000; // 2 hours
+    const jitter = (Math.random() * 30 - 15) * 60 * 1000; // +/- 15 mins jitter
+
+    if (elapsed < (targetInterval + jitter)) {
+      return;
+    }
+
+    console.log('[Heartbeat] Proactive check triggered (Schedule met)...');
+    this.lastTriggerTime = now.getTime();
+
+    const userId = "8561600191"; // Hardcoded for single-user mode
+
+    const prompt = `[SYSTEM EVENT: TIME PASSAGE]
+It is now ${now.toISOString()}. 
+You have not spoken to the user in a while (Automatic 2-hour check). 
+Check the system status silently. 
+If everything is fine, maybe send a short greeting, a check-in, or share a relevant thought.
+If you find an issue, report it.
+DECIDE: Stay silent (Output "") or Speak.`;
+
+    // Define the reply callback for the agent
+    const replyCallback = async (text: string) => {
+      if (text) await this.sendMessage(userId, text);
+    };
+
+    try {
+      await this.agent.processMessage(userId, prompt, replyCallback);
+    } catch (e) {
+      console.error('[Heartbeat] Error in proactive think:', e);
     }
   }
 }

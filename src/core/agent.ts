@@ -6,7 +6,7 @@ import { AgentContext } from './skill';
 export class Agent {
   private llm: LLM;
   private memory: IMemorySystem;
-  private systemPrompt: string;
+  private defaultSystemPrompt: string; // Base prompt (Character + Soul)
   private skillPrompts: string = "";
 
   // Hardcoded engine
@@ -19,7 +19,7 @@ export class Agent {
   ) {
     this.llm = llm;
     this.memory = memory;
-    this.systemPrompt = systemPrompt;
+    this.defaultSystemPrompt = systemPrompt;
   }
 
   async loadSkills() {
@@ -29,26 +29,69 @@ export class Agent {
 
     try {
       const files = await fs.readdir(skillsDir);
+      let loadedCount = 0;
       for (const file of files) {
         if (file.endsWith('.mk') || file.endsWith('.md')) {
           const content = await fs.readFile(path.join(skillsDir, file), 'utf-8');
           this.skillPrompts += `\n---\nSOURCE: ${file}\n${content}\n`;
+          loadedCount++;
         }
       }
+      console.log(`[Agent] Loaded ${loadedCount} skill prompts from ${skillsDir}`);
     } catch (e) {
       console.error('Error loading skills:', e);
     }
   }
 
-  // Refactored to accept callback for multiple replies
   async processMessage(userId: string, message: string, sendReply: (text: string) => Promise<void>): Promise<void> {
     console.log(`[Agent] Processing message from ${userId}: ${message}`);
+    const fs = require('fs-extra');
+    const path = require('path');
 
+    // 1. Dynamic Identity Loading
+    let soulContent = "IDENTITY: Default Aven";
+    let userContent = `USER: ${userId} (New User)`;
+
+    try {
+      // Load Soul (Global)
+      const soulPath = path.join(__dirname, '../../data/soul.md');
+      if (await fs.pathExists(soulPath)) {
+        soulContent = await fs.readFile(soulPath, 'utf-8');
+      }
+
+      // Load User Profile (Specific)
+      const userDir = path.join(__dirname, '../../data/users');
+      await fs.ensureDir(userDir);
+
+      const userPath = path.join(userDir, `${userId}.md`);
+      const templatePath = path.join(userDir, 'template.md'); // If we have one
+
+      if (await fs.pathExists(userPath)) {
+        userContent = await fs.readFile(userPath, 'utf-8');
+      } else {
+        // New User! Output log and maybe create default?
+        console.log(`[Agent] New user ${userId} detected. Creating profile...`);
+        if (await fs.pathExists(templatePath)) {
+          userContent = await fs.readFile(templatePath, 'utf-8');
+        } else {
+          userContent = `# USER PROFILE (${userId})\nFirst interaction: ${new Date().toISOString()}\n\n## NOTES\n(No data yet)`;
+        }
+        await fs.writeFile(userPath, userContent);
+      }
+    } catch (e) {
+      console.error('[Agent] Error loading Dynamic Identity:', e);
+    }
+
+    // 2. Construct System Prompt
+    // Combine Soul, User Profile, and Base Personality
+    const dynamicSystemPrompt = `${soulContent}\n\n${userContent}`;
+
+    // 3. Memory & Context
     await this.memory.addMessage('user', message);
     const contextStr = await this.memory.getContext();
 
-    // Prompt Construction
-    const systemInstruction = `${this.systemPrompt}
+    // 4. Prompt Construction
+    const systemInstruction = `${dynamicSystemPrompt}
 
 KNOWN SKILLS / INSTRUCTIONS:
 ${this.skillPrompts}`;
@@ -59,30 +102,24 @@ ${contextStr}
 CURRENT USER MESSAGE:
 ${message}
 
-INSTRUCTION: 
-If you simply want to talk, just reply.
-If you need to use a tool, output the code block.
-You may send a short acknowledgement first if the task is long.`;
+CRITICAL INSTRUCTION:
+1. DECIDE: Does the user want a task done?
+2. YES: Output CODE BLOCK immediately.
+3. NO: Chat naturally.
+4. PRIORITY: Action > Talk.
+`;
 
     // --- ROUND 1: Think & Act ---
     let response = await this.llm.chat(systemInstruction, userPayload);
     response = response ? response.trim() : "";
 
-    // If response contains "I will check..." or similar conversational filler AND a code block,
-    // we should ideally split it. But for now, let's just send the non-code part?
-    // Actually, user wants "Multiple replies".
-    // If LLM says: "Okay checking... ```bash ls ```", we should send "Okay checking..." then run code.
-
-    if (!response) {
-      return;
-    }
+    if (!response) return;
 
     const codeBlockRegex = /```(\w+)\n([\s\S]*?)```/;
     const match = codeBlockRegex.exec(response);
 
     if (match) {
-      // We found code.
-      // Did we say something BEFORE the code?
+      // Pre-code text?
       const prefix = response.substring(0, match.index).trim();
       if (prefix) {
         await sendReply(prefix);
@@ -110,7 +147,6 @@ ${toolOutput}
 FINAL INSTRUCTION:
 Formulate the final response to the user based on the tool output.
 `;
-
       let round2Response = await this.llm.chat(systemInstruction, round2Prompt);
       round2Response = round2Response ? round2Response.trim() : "";
 
