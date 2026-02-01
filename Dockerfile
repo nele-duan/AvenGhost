@@ -20,7 +20,7 @@ RUN npm install --production
 
 COPY --from=builder /app/dist ./dist
 # Copy setup script if user wants to run setup inside container (rare but possible)
-COPY setup.ts ./
+COPY setup.js ./
 
 # Create data and workspace dirs
 RUN mkdir -p data workspace
