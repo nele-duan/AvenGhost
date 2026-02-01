@@ -99,23 +99,33 @@ ${this.skillPrompts}`;
     const userPayload = `CONTEXT HISTORY:
 ${contextStr}
 
+CURRENT SYSTEM TIME: ${new Date().toLocaleString()} (Timezone: Server Local)
+
 CURRENT USER MESSAGE:
 ${message}
 
 CRITICAL INSTRUCTION:
-1. DECIDE: Does the user want a task done?
-2. YES: Output CODE BLOCK immediately.
-3. NO: Chat naturally.
-4. PRIORITY: Action > Talk.
+1. DECIDE: Does the user want a task done (search, file, check system)?
+2. YES: You MUST output a MARKDOWN CODE BLOCK immediately.
+   Format: \`\`\`bash command \`\`\`
+   DO NOT just write the command as text.
+   DO NOT apologize. just execute.
+3. NO: Just chat naturally.
+PRIORITY: Action > Talk.
 `;
 
     // --- ROUND 1: Think & Act ---
     let response = await this.llm.chat(systemInstruction, userPayload);
     response = response ? response.trim() : "";
 
+    console.log(`[Agent] RAW LLM RESPONSE:\n${response}\n[END RAW]`);
+
     if (!response) return;
 
-    const codeBlockRegex = /```(\w+)\n([\s\S]*?)```/;
+    // Regex to capture code blocks. 
+    // Relaxed: Language tag optional-ish (but we strictly asked for it).
+    // Captures: ```(lang?) (code) ```
+    const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/;
     const match = codeBlockRegex.exec(response);
 
     if (match) {
@@ -126,7 +136,9 @@ CRITICAL INSTRUCTION:
         await this.memory.addMessage('assistant', prefix);
       }
 
-      const language = match[1].toLowerCase();
+      let language = match[1] ? match[1].toLowerCase().trim() : 'bash';
+      if (language === '') language = 'bash'; // Default
+
       const code = match[2];
       console.log(`[Agent] Executing Code (${language})...`);
 
