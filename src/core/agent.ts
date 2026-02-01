@@ -112,6 +112,10 @@ CRITICAL INSTRUCTION:
    DO NOT apologize. just execute.
 3. NO: Just chat naturally.
 PRIORITY: Action > Talk.
+IF YOU DECIDE TO SEARCH:
+1. IGNORE "Pure Dialogue" rule for the action part.
+2. WRITE THE CODE BLOCK.
+3. DO NOT write "I will search". JUST WRITE THE CODE.
 `;
 
     // --- ROUND 1: Think & Act ---
