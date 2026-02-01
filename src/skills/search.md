@@ -1,38 +1,32 @@
 # Web Search
-To search the internet, you must Write Code to call an API.
+To search the internet, you MUST write a **Node.js** script to call the Brave Search API.
 You have the `BRAVE_SEARCH_API_KEY` in the environment.
 
-## Method
-Write a **Python** or **Node.js** script to call `https://api.search.brave.com/res/v1/web/search`.
+## CRITICAL:
+- DO NOT output "search query".
+- DO NOT ask permission.
+- OUTPUT THE CODE BLOCK IMMEDIATELY.
 
 ## Example (Node.js)
 \`\`\`javascript
 const axios = require('axios');
 const key = process.env.BRAVE_SEARCH_API_KEY;
 
-if (!key) {
-    console.error("Error: BRAVE_SEARCH_API_KEY is missing in environment.");
-    process.exit(1);
-}
+if (!key) { console.error("No API Key"); process.exit(1); }
+
+// Query based on user input
+const query = "latest LLM news feburary 2026"; 
+
+console.log("Searching for:", query);
 
 axios.get('https://api.search.brave.com/res/v1/web/search', {
-  params: { q: "latest LLM news", count: 3 },
-  headers: { 
-      'X-Subscription-Token': key,
-      'Accept': 'application/json'
-  }
+  params: { q: query, count: 5 },
+  headers: { 'X-Subscription-Token': key, 'Accept': 'application/json' }
 }).then(res => {
-  if (res.data && res.data.web && res.data.web.results) {
-      res.data.web.results.forEach(r => console.log(`- ${r.title}: ${r.description}`));
+  if (res.data.web.results) {
+      res.data.web.results.forEach(r => console.log(`- ${r.title}: ${r.description}\n  Link: ${r.url}\n`));
   } else {
-      console.log("No results found or unexpected format.");
+      console.log("No results.");
   }
-}).catch(err => {
-    // Print deep error for debugging
-    if (err.response) {
-        console.error(`API Error: ${err.response.status} ${JSON.stringify(err.response.data)}`);
-    } else {
-        console.error(`Network Error: ${err.message}`);
-    }
-});
+}).catch(e => console.error(e.message));
 \`\`\`
