@@ -16,7 +16,19 @@ const question = (query, defaultValue) => new Promise((resolve) => {
 async function main() {
   console.log('👻 Welcome to AvenGhost Setup Wizard 👻');
   console.log('---------------------------------------');
-  console.log('This script will generate your .env file.\n');
+
+  console.log('\n⚠️  CRITICAL SECURITY WARNING ⚠️');
+  console.log('You are about to give this Agent FULL ADMINISTRATOR/ROOT privileges.');
+  console.log('It will be able to execute ANY code, modify files, and control this server.');
+  console.log('Use with extreme caution. Do not run this on a shared production server.');
+
+  const proceed = await question('Type "I AGREE" to proceed with root access setup:', '');
+  if (proceed !== 'I AGREE') {
+    console.log('❌ Setup aborted for safety.');
+    process.exit(1);
+  }
+
+  console.log('\nThis script will generate your .env file.\n');
 
   const botToken = await question('Enter your Telegram Bot Token');
   if (!botToken) { console.error('❌ Token is required!'); process.exit(1); }

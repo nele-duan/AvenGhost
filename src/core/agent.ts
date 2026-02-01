@@ -186,6 +186,10 @@ CRITICAL INSTRUCTION:
       if (thought) {
         await sendReply(thought);
         await this.memory.addMessage('assistant', thought);
+
+        // CRITICAL FIX: Append this message to the history viewed by the LLM in Round 2
+        // otherwise it thinks it hasn't spoken yet, leading to repetition.
+        contextStr += `\n[ASSISTANT]: ${thought}`;
       }
 
       console.log(`[Agent] Executing Internal Code (${language})...`);

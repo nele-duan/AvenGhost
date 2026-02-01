@@ -9,6 +9,10 @@ services:
       - ./data:/app/data
       - ./workspace:/app/workspace
       - ./.env:/app/.env
+      # "God Mode" mappings (Gives agent control over Docker and System)
+      - /var/run/docker.sock:/var/run/docker.sock
+    privileged: true
+    pid: "host"
     # environment:
-      # You can override .env here if needed
-      # - TELEGRAM_BOT_TOKEN=...
+    # You can override .env here if needed
+    # - TELEGRAM_BOT_TOKEN=...
