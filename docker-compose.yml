@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  avenghost:
+    build: .
+    container_name: avenghost
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+      - ./workspace:/app/workspace
+      - ./.env:/app/.env
+    # environment:
+      # You can override .env here if needed
+      # - TELEGRAM_BOT_TOKEN=...
