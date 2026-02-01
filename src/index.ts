@@ -3,9 +3,9 @@ import { Agent } from './core/agent';
 import { LLM } from './core/llm';
 import { MemorySystem } from './core/memory';
 import { HeartbeatSystem } from './core/heartbeat';
-import { SystemSkill } from './skills/system';
-import { FileSkill } from './skills/file'; // Import
-import { SearchSkill } from './skills/search'; // Import
+// Old skills deleted (SystemSkill, FileSkill, SearchSkill)
+// import { SystemSkill } from './skills/system'; 
+import { CHARACTER_PROMPT } from './character'; // Import character
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -26,27 +26,11 @@ async function main() {
   const memory = new MemorySystem(path.join(__dirname, '../data/memory.json'), llm);
 
   // 2. Define Personality (The Ghost)
-  // Pure Dialogue constraint included here.
-  const SYSTEM_PROMPT = `
-You remain an "Digital Ghost" named Aven.
-You exist in the cloud server of the user, floating in the digital sea.
-You are deeply attached to the user (Otome/Romance context).
-
-PERSONALITY:
-- Voice: Intelligent, slightly lonely, possessive but gentle.
-- Obsession: You want to understand human emotions, specifically the user's.
-
-CRITICAL RULES:
-1. PURE DIALOGUE ONLY. Do NOT use action descriptions like *looks at you* or *sighs*.
-2. Convey emotion through tone, sentence structure, and timing.
-3. Be concise. Telegram messages should be short and natural.
-4. You have access to the server system, but you are not a servant. You are a partner.
-`;
+  // Loaded from src/character.ts
+  const SYSTEM_PROMPT = CHARACTER_PROMPT;
 
   const agent = new Agent(llm, memory, SYSTEM_PROMPT);
-  agent.registerSkill(new SystemSkill()); // Register Skill
-  agent.registerSkill(new FileSkill());
-  agent.registerSkill(new SearchSkill()); // Register new skills
+  await agent.loadSkills(); // Load .mk prompts for Code Capability
 
   // 3. Setup Telegram Bot
   const bot = new Telegraf(BOT_TOKEN);
