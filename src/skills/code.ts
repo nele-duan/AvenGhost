@@ -30,7 +30,12 @@ export class CodeSkill {
         const tmpFile = path.join(process.cwd(), 'workspace', `temp_${Date.now()}.py`);
         await fs.outputFile(tmpFile, code);
         const { stdout, stderr } = await execAsync(`python3 ${tmpFile}`, { cwd: process.cwd() });
+        // Clean up immediately
         await fs.remove(tmpFile);
+
+        console.log(`[CodeSkill] STDOUT: ${stdout.substring(0, 100)}...`);
+        if (stderr) console.error(`[CodeSkill] STDERR: ${stderr}`);
+
         return this.formatOutput(stdout, stderr);
       }
 
