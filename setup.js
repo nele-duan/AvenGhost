@@ -1,8 +1,10 @@
-import inquirer from 'inquirer';
-import fs from 'fs-extra';
-import path from 'path';
+const fs = require('fs-extra');
+const path = require('path');
 
 async function main() {
+  // Dynamic import for inquirer (ESM package)
+  const { default: inquirer } = await import('inquirer');
+
   console.log('👻 Welcome to AvenGhost Setup Wizard 👻');
   console.log('---------------------------------------');
 
@@ -29,8 +31,8 @@ async function main() {
       type: 'input',
       name: 'OPENAI_BASE_URL',
       message: 'Enter Base URL (Leave empty for default):',
-      default: (answers: any) => answers.PROVIDER === 'OpenRouter' ? 'https://openrouter.ai/api/v1' : undefined,
-      when: (answers: any) => answers.PROVIDER === 'OpenRouter' || answers.PROVIDER === 'OpenAI'
+      default: (answers) => answers.PROVIDER === 'OpenRouter' ? 'https://openrouter.ai/api/v1' : undefined,
+      when: (answers) => answers.PROVIDER === 'OpenRouter' || answers.PROVIDER === 'OpenAI'
     },
     {
       type: 'input',
