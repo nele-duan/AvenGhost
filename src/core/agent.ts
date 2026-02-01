@@ -7,8 +7,6 @@ export class Agent {
   private llm: LLM;
   private memory: IMemorySystem;
   private systemPrompt: string;
-  // No longer map of ISkill (except CodeSkill internally)
-  // We handle skills as Text Prompts now + CodeSkill engine
   private skillPrompts: string = "";
 
   // Hardcoded engine
@@ -42,55 +40,88 @@ export class Agent {
     }
   }
 
-  async processMessage(userId: string, message: string): Promise<string> {
+  // Refactored to accept callback for multiple replies
+  async processMessage(userId: string, message: string, sendReply: (text: string) => Promise<void>): Promise<void> {
     console.log(`[Agent] Processing message from ${userId}: ${message}`);
 
-    // 1. Add User Message
     await this.memory.addMessage('user', message);
-
-    // 2. Prepare Context (History)
     const contextStr = await this.memory.getContext();
 
-    // 3. Construct Initial Prompt
-    const header = `${this.systemPrompt}
+    // Prompt Construction
+    const systemInstruction = `${this.systemPrompt}
 
 KNOWN SKILLS / INSTRUCTIONS:
-${this.skillPrompts}
+${this.skillPrompts}`;
 
-CONTEXT:
+    const userPayload = `CONTEXT HISTORY:
 ${contextStr}
 
-USER MESSAGE:
-${message}`;
+CURRENT USER MESSAGE:
+${message}
+
+INSTRUCTION: 
+If you simply want to talk, just reply.
+If you need to use a tool, output the code block.
+You may send a short acknowledgement first if the task is long.`;
 
     // --- ROUND 1: Think & Act ---
-    let response = await this.llm.chat(header, message);
-    console.log(`[Agent] Round 1 Response: ${response.substring(0, 50)}...`);
+    let response = await this.llm.chat(systemInstruction, userPayload);
+    response = response ? response.trim() : "";
 
-    // Check for Code Blocks: ```bash ... ```
-    const codeBlockRegex = /```(\w+)\n([\s\S]*?)```/; // Regex to find FIRST code block
-    const match = codeBlockRegex.exec(response);
-    let toolOutput = "";
+    // If response contains "I will check..." or similar conversational filler AND a code block,
+    // we should ideally split it. But for now, let's just send the non-code part?
+    // Actually, user wants "Multiple replies".
+    // If LLM says: "Okay checking... ```bash ls ```", we should send "Okay checking..." then run code.
 
-    if (match) {
-      const language = match[1].toLowerCase();
-      const code = match[2];
-
-      console.log(`[Agent] Found Code Block (${language})`);
-
-      // Execute Code using the hardcoded engine
-      const output = await this.codeSkill.execute(language, code);
-      console.log(`[Agent] Code Output available.`);
-
-      toolOutput = `\n[SYSTEM: Command executed. Output below]\n${output}\n`;
-
-      // --- ROUND 2: Interpret & Reply ---
-      const followUpPrompt = `${header}\n\nASSISTANT THOUGHT:\n${response}\n\n${toolOutput}\n\nINSTRUCTION: Now reply to the user naturally, incorporating the result above.`;
-
-      response = await this.llm.chat(followUpPrompt, "System: Provide final answer.");
+    if (!response) {
+      return;
     }
 
-    await this.memory.addMessage('assistant', response);
-    return response;
+    const codeBlockRegex = /```(\w+)\n([\s\S]*?)```/;
+    const match = codeBlockRegex.exec(response);
+
+    if (match) {
+      // We found code.
+      // Did we say something BEFORE the code?
+      const prefix = response.substring(0, match.index).trim();
+      if (prefix) {
+        await sendReply(prefix);
+        await this.memory.addMessage('assistant', prefix);
+      }
+
+      const language = match[1].toLowerCase();
+      const code = match[2];
+      console.log(`[Agent] Executing Code (${language})...`);
+
+      // Execute
+      const output = await this.codeSkill.execute(language, code);
+      const toolOutput = `\n[SYSTEM: Command Executed. Result Follows:]\n${output}\n`;
+
+      // --- ROUND 2: Reflect & Final Reply ---
+      const round2Prompt = `
+${userPayload}
+
+ASSISTANT THOUGHT (Previous Step):
+${response}
+
+SYSTEM TOOL OUTPUT:
+${toolOutput}
+
+FINAL INSTRUCTION:
+Formulate the final response to the user based on the tool output.
+`;
+
+      let round2Response = await this.llm.chat(systemInstruction, round2Prompt);
+      round2Response = round2Response ? round2Response.trim() : "";
+
+      if (round2Response) {
+        await sendReply(round2Response);
+        await this.memory.addMessage('assistant', round2Response);
+      }
+    } else {
+      // No code, just talk
+      await sendReply(response);
+      await this.memory.addMessage('assistant', response);
+    }
   }
 }

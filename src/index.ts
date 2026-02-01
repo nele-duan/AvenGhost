@@ -52,8 +52,12 @@ async function main() {
     ctx.sendChatAction('typing');
 
     try {
-      const response = await agent.processMessage(userId, message);
-      await ctx.reply(response);
+      // Pass a callback function to handle replies
+      await agent.processMessage(userId, message, async (replyText) => {
+        if (replyText && replyText.trim() !== "") {
+          await ctx.reply(replyText);
+        }
+      });
     } catch (e) {
       console.error('Error processing message:', e);
       await ctx.reply('... (Static noise) ... System error ...');
