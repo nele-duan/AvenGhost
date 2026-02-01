@@ -25,9 +25,24 @@ export class Agent {
   async loadSkills() {
     const fs = require('fs-extra');
     const path = require('path');
-    const skillsDir = path.join(__dirname, '../skills');
+
+    // Fix: In production (dist), __dirname is 'dist/core'. 
+    // .md files are in 'src/skills' and are NOT copied to dist by tsc.
+    // So we must look in '../../src/skills'.
+    let skillsDir = path.join(__dirname, '../../src/skills');
+
+    // Fallback: If we are running in ts-node (dev), it might be different, or if files were copied.
+    if (!await fs.pathExists(skillsDir)) {
+      console.warn(`[Agent] Warning: Skills dir not found at ${skillsDir}. Trying '../skills'...`);
+      skillsDir = path.join(__dirname, '../skills');
+    }
 
     try {
+      if (!await fs.pathExists(skillsDir)) {
+        console.error(`[Agent] CRITICAL: Skills directory not found at ${skillsDir}. Skills will not be loaded.`);
+        return;
+      }
+
       const files = await fs.readdir(skillsDir);
       let loadedCount = 0;
       for (const file of files) {
