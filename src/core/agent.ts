@@ -58,7 +58,13 @@ export class Agent {
     }
   }
 
-  async processMessage(userId: string, message: string, sendReply: (text: string) => Promise<void>): Promise<void> {
+  async processMessage(
+    userId: string,
+    message: string,
+    sendReply: (text: string) => Promise<void>,
+    sendReaction?: (emoji: string) => Promise<void>,
+    sendImage?: (url: string, caption?: string) => Promise<void>
+  ): Promise<void> {
     console.log(`[Agent] Processing message from ${userId}: ${message}`);
     const fs = require('fs-extra');
     const path = require('path');
@@ -120,30 +126,42 @@ CURRENT USER MESSAGE:
 ${message}
 
 CRITICAL INSTRUCTION:
-1. DECIDE: Does the user want a task done (search, file, check system)?
-2. YES: You MUST output a MARKDOWN CODE BLOCK immediately.
-   Format: \`\`\`bash command \`\`\`
-   DO NOT just write the command as text.
-   DO NOT apologize. just execute.
-3. NO: Just chat naturally.
-PRIORITY: Action > Talk.
-IF YOU DECIDE TO SEARCH:
-1. IGNORE "Pure Dialogue" rule for the action part.
-2. WRITE THE CODE BLOCK.
-3. DO NOT write "I will search". JUST WRITE THE CODE.
+1. DECIDE: Does the user want a task done?
+2. YES: Output CODE BLOCK immediately.
+3. NO: Chat naturally.
+4. REACTION: [REACTION:emoji] (e.g. [REACTION:❤️]).
+5. IMAGES: [IMAGE:url] (e.g. [IMAGE:https://example.com/pic.jpg]).
+   Use this to share images found during search or from valid URLs.
+   LINKS: Use Markdown [Title](url) to share links.
 `;
 
-    // --- ROUND 1: Think & Act ---
+    // --- ROUND 1 ---
     let response = await this.llm.chat(systemInstruction, userPayload);
     response = response ? response.trim() : "";
-
     console.log(`[Agent] RAW LLM RESPONSE:\n${response}\n[END RAW]`);
-
     if (!response) return;
 
-    // Regex to capture code blocks. 
-    // Relaxed: Language tag optional-ish (but we strictly asked for it).
-    // Captures: ```(lang?) (code) ```
+    // PARSE REACTION
+    const reactionRegex = /\[REACTION:(.+?)\]/g;
+    let matchReaction;
+    while ((matchReaction = reactionRegex.exec(response)) !== null) {
+      const emoji = matchReaction[1].trim();
+      if (sendReaction) await sendReaction(emoji);
+    }
+    response = response.replace(reactionRegex, '').trim();
+
+    // PARSE IMAGE
+    const imageRegex = /\[IMAGE:(.+?)\]/g;
+    let matchImage;
+    while ((matchImage = imageRegex.exec(response)) !== null) {
+      const url = matchImage[1].trim();
+      console.log(`[Agent] Sending Image: ${url}`);
+      // Optional: Extract caption from text? For now, just send image.
+      if (sendImage) await sendImage(url);
+    }
+    response = response.replace(imageRegex, '').trim();
+
+    // Now handle code blocks...
     const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/;
     const match = codeBlockRegex.exec(response);
 
