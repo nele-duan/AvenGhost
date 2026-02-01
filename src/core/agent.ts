@@ -117,7 +117,7 @@ export class Agent {
 KNOWN SKILLS / INSTRUCTIONS:
 ${this.skillPrompts}`;
 
-    const userPayload = `CONTEXT HISTORY:
+    let userPayload = `CONTEXT HISTORY:
 ${contextStr}
 
 CURRENT SYSTEM TIME: ${new Date().toLocaleString()} (Timezone: Server Local)
@@ -187,9 +187,8 @@ CRITICAL INSTRUCTION:
         await sendReply(thought);
         await this.memory.addMessage('assistant', thought);
 
-        // CRITICAL FIX: Append this message to the history viewed by the LLM in Round 2
-        // otherwise it thinks it hasn't spoken yet, leading to repetition.
-        contextStr += `\n[ASSISTANT]: ${thought}`;
+        // CRITICAL FIX: Update userPayload so Round 2 sees this message!
+        userPayload += `\n\n[ASSISTANT PREVIOUSLY SAID]:\n${thought}`;
       }
 
       console.log(`[Agent] Executing Internal Code (${language})...`);
