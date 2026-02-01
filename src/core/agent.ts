@@ -141,12 +141,10 @@ CRITICAL INSTRUCTION:
     // --- ROUND 1 ---
     let response = await this.llm.chat(systemInstruction, userPayload);
     response = response ? response.trim() : "";
-    console.log(`[Agent] RAW LLM RESPONSE:\n${response}\n[END RAW]`);
-    if (!response) return;
 
-    // PARSE REACTION
-    // Support: [REACTION:x], REACTION:x, Reaction: x
-    const reactionRegex = /\[?REACTION:\s*([^\s\]]+)\]?/gi;
+    // AGGRESSIVE Reaction Cleaning
+    // Matches: [REACTION:x], REACTION:x, Reaction: x, with or without brackets
+    const reactionRegex = /(?:\[\s*)?REACTION\s*:\s*([^\s\]]+)(?:\s*\])?/gi;
     let matchReaction;
     while ((matchReaction = reactionRegex.exec(response)) !== null) {
       const emoji = matchReaction[1].trim();
@@ -154,12 +152,11 @@ CRITICAL INSTRUCTION:
     }
     response = response.replace(reactionRegex, '').trim();
 
-    // PARSE IMAGE
-    const imageRegex = /\[?IMAGE:\s*([^\s\]]+)\]?/gi;
+    // Image Cleaning
+    const imageRegex = /(?:\[\s*)?IMAGE\s*:\s*([^\s\]]+)(?:\s*\])?/gi;
     let matchImage;
     while ((matchImage = imageRegex.exec(response)) !== null) {
       const url = matchImage[1].trim();
-      console.log(`[Agent] Sending Image: ${url}`);
       if (sendImage) await sendImage(url);
     }
     response = response.replace(imageRegex, '').trim();
@@ -169,39 +166,46 @@ CRITICAL INSTRUCTION:
     const match = codeBlockRegex.exec(response);
 
     if (match) {
-      // Pre-code text?
-      const prefix = response.substring(0, match.index).trim();
-      if (prefix) {
-        await sendReply(prefix);
-        await this.memory.addMessage('assistant', prefix);
+      // Found Code!
+      // 1. Capture the thought (text before code).
+      const thought = response.substring(0, match.index).trim();
+      const language = match[1] ? match[1].toLowerCase().trim() : 'bash';
+      const code = match[2];
+
+      // 2. SEND THE THOUGHT (Process) to the user, if it exists.
+      // This satifies the user requirement: "Show process, but hide code"
+      if (thought) {
+        await sendReply(thought);
+        await this.memory.addMessage('assistant', thought);
       }
 
-      let language = match[1] ? match[1].toLowerCase().trim() : 'bash';
-      if (language === '') language = 'bash'; // Default
+      console.log(`[Agent] Executing Internal Code (${language})...`);
 
-      const code = match[2];
-      console.log(`[Agent] Executing Code (${language})...`);
+      // Store code in memory as INTERNAL so it's in context but not shown to user again.
+      await this.memory.addMessage('assistant', `[INTERNAL CODE]: ${code}`);
 
       // Execute
-      const output = await this.codeSkill.execute(language, code);
+      const output = await this.codeSkill.execute(language || 'bash', code);
       const toolOutput = `\n[SYSTEM: Command Executed. Result Follows:]\n${output}\n`;
 
       // --- ROUND 2: Reflect & Final Reply ---
       const round2Prompt = `
 ${userPayload}
 
-ASSISTANT PREVIOUS MESSAGE (Already sent to user):
-${prefix || "(No text, just code)"}
+ASSISTANT PREVIOUSLY SAID:
+${thought || "(No text, just action)"}
+
+EXECUTED CODE (Hidden from user):
+${code}
 
 SYSTEM TOOL OUTPUT:
 ${toolOutput}
 
 CRITICAL INSTRUCTION:
-1. The user has ALREADY seen your 'PREVIOUS MESSAGE' (above).
-2. DO NOT repeat the same emotions/words from that message.
-3. Formulate a NEW response based *strictly* on the Tool Output.
-4. If the tool fixed a problem, confirm it briefly. 
-5. Keep it natural.
+1. You have ALREADY told the user what you are doing (see "PREVIOUSLY SAID").
+2. DO NOT repeat your plan. 
+3. Report the result of the action or answer the user's question based on the Tool Output.
+4. Keep it conversational.
 `;
       let round2Response = await this.llm.chat(systemInstruction, round2Prompt);
       round2Response = round2Response ? round2Response.trim() : "";
