@@ -129,10 +129,13 @@ CRITICAL INSTRUCTION:
 1. DECIDE: Does the user want a task done?
 2. YES: Output CODE BLOCK immediately.
 3. NO: Chat naturally.
-4. REACTION: [REACTION:emoji] (e.g. [REACTION:❤️]).
-5. IMAGES: [IMAGE:url] (e.g. [IMAGE:https://example.com/pic.jpg]).
-   Use this to share images found during search or from valid URLs.
-   LINKS: Use Markdown [Title](url) to share links.
+4. REACTION: You MUST use the hidden tag [REACTION:emoji] to react.
+   INVALID: "(I react with a heart)" or "*reacts*"
+   VALID: [REACTION:❤️]
+   Supported Emojis: 👍, 👎, ❤️, 🔥, 🥰, 👏, 😁, 🤔, 🤯, 😱, 🤬, 😢, 🎉, 🤩, 🤮, 💩, 🙏, 🕊️, 🤡, 🥱, 🥴, 😍, 🐳, 🤝, 👨‍💻, 👀, 🌚, ⚡️, 🍌, 🏆, 💔, 🤨, 😐, 🍓, 🍾, 💋, 🖕, 😈, 😴, 😭, 🤓, 👻, 👨‍🏫, 🤝, ✍️, 🥺, 🦜,  Saturn, etc.
+   Use this liberally to show emotion!
+5. IMAGES: [IMAGE:url] (e.g. [IMAGE:https://...]).
+   LINKS: [Title](url)
 `;
 
     // --- ROUND 1 ---
