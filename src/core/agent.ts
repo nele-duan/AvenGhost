@@ -85,12 +85,11 @@ export class Agent {
       await fs.ensureDir(userDir);
 
       const userPath = path.join(userDir, `${userId}.md`);
-      const templatePath = path.join(userDir, 'template.md'); // If we have one
+      const templatePath = path.join(userDir, 'template.md');
 
       if (await fs.pathExists(userPath)) {
         userContent = await fs.readFile(userPath, 'utf-8');
       } else {
-        // New User! Output log and maybe create default?
         console.log(`[Agent] New user ${userId} detected. Creating profile...`);
         if (await fs.pathExists(templatePath)) {
           userContent = await fs.readFile(templatePath, 'utf-8');
@@ -104,14 +103,9 @@ export class Agent {
     }
 
     // 2. Construct System Prompt
-    // Combine Soul, User Profile, and Base Personality
     const dynamicSystemPrompt = `${this.defaultSystemPrompt}\n\n${soulContent}\n\n${userContent}`;
 
     // 3. Memory & Context
-    // We pass null for LLM because MemorySystem is now passive (no auto-summary)
-    // Actually Agent.ts doesn't init MemorySystem, index.ts does. 
-    // We just need to update the prompt here.
-
     await this.memory.addMessage('user', message);
     let contextStr = await this.memory.getContext();
 
@@ -169,126 +163,86 @@ GIT PROTOCOL (SAFETY FIRST):
    - PREFER 1 MESSAGE for simple actions.
 `;
 
-    // --- ROUND 1 ---
-    let response = await this.llm.chat(systemInstruction, userPayload);
-    response = response ? response.trim() : "";
+    // --- REACT LOOP (Max 15 Turns) ---
+    let turnCount = 0;
+    const MAX_TURNS = 4;
+    let finalPayload = userPayload;
 
-    // AGGRESSIVE Reaction Cleaning
-    // Matches: [REACTION:x], REACTION:x, Reaction: x, with or without brackets
-    const reactionRegex = /(?:\[\s*)?REACTION\s*:\s*([^\s\]]+)(?:\s*\])?/gi;
-    let matchReaction;
-    let hasReacted = false; // Limit to 1 reaction per turn
+    while (turnCount < MAX_TURNS) {
+      turnCount++;
 
-    while ((matchReaction = reactionRegex.exec(response)) !== null) {
-      const emoji = matchReaction[1].trim();
-      if (sendReaction && !hasReacted) {
-        await sendReaction(emoji);
-        hasReacted = true;
-      }
-    }
-    response = response.replace(reactionRegex, '').trim();
+      // Chat with LLM
+      let response = await this.llm.chat(systemInstruction, finalPayload);
+      response = response ? response.trim() : "";
 
-    // Image Cleaning
-    const imageRegex = /(?:\[\s*)?IMAGE\s*:\s*([^\s\]]+)(?:\s*\])?/gi;
-    let matchImage;
-    while ((matchImage = imageRegex.exec(response)) !== null) {
-      const url = matchImage[1].trim();
-      if (sendImage) await sendImage(url);
-    }
-    response = response.replace(imageRegex, '').trim();
-
-    // Now handle code blocks...
-    const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/;
-    const match = codeBlockRegex.exec(response);
-
-    if (match) {
-      // Found Code!
-      // 1. Capture the thought (text before code).
-      const thought = response.substring(0, match.index).trim();
-      const language = match[1] ? match[1].toLowerCase().trim() : 'bash';
-      const code = match[2];
-
-      // 2. SEND THE THOUGHT (Process) to the user, if it exists.
-      // This satifies the user requirement: "Show process, but hide code"
-      if (thought) {
-        await sendReply(thought);
-        await this.memory.addMessage('assistant', thought);
-
-        // CRITICAL FIX: Update userPayload so Round 2 sees this message!
-        // Actually, we will NOT reuse userPayload for Round 2 anymore. 
-        // We will build a dedicated "Reflection Prompt" to avoid the "Fresh Input" bias.
-      }
-
-      console.log(`[Agent] Executing Internal Code (${language})...`);
-
-      // Store code in memory as INTERNAL
-      await this.memory.addMessage('assistant', `[INTERNAL CODE]: ${code}`);
-
-      // Execute
-      const output = await this.codeSkill.execute(language || 'bash', code);
-      const toolOutput = `\n[SYSTEM: Command Executed. Result Follows:]\n${output}\n`;
-
-      // --- ROUND 2: Reflect & Final Reply ---
-      // We construct a NEW prompt focused purely on the RESULT.
-      // We do NOT include the full 'userPayload' to prevent re-triggering the "New Message" reflex.
-
-      const round2Prompt = `
-CONTEXT HISTORY:
-${contextStr}
-
----
-ORIGINAL USER REQUEST:
-${message}
-
-YOUR IMMEDIATE ACTION (Just Performed):
-${thought || "(Silent Action)"}
-
-EXECUTED CODE (Hidden from user):
-${code}
-
-SYSTEM TOOL OUTPUT:
-${toolOutput}
-
-CRITICAL INSTRUCTION:
-1. The action is COMPLETE. The code has RUN.
-2. DO NOT repeat the plan ("I will now...").
-3. DO NOT repeat the user's request ("You asked me to...").
-4. FOCUS ONLY on the SYSTEM TOOL OUTPUT.
-5. Provide the answer/insight directly to the user.
-6. If the output is an error, explain it.
-7. Keep it conversational (Otome Style).
-`;
-      let round2Response = await this.llm.chat(systemInstruction, round2Prompt);
-      round2Response = round2Response ? round2Response.trim() : "";
-
-      // --- CLEAN ROUND 2 ("Information Filtering") ---
-      // Apply the same cleaning logic to the final response
-      // Reuse regex (lastIndex is not an issue with match loop/replace)
-
-      while ((matchReaction = reactionRegex.exec(round2Response)) !== null) {
+      // 1. Clean Reactions
+      const reactionRegex = /(?:\[\s*)?REACTION\s*:\s*([^\s\]]+)(?:\s*\])?/gi;
+      let matchReaction;
+      let hasReacted = false;
+      while ((matchReaction = reactionRegex.exec(response)) !== null) {
         const emoji = matchReaction[1].trim();
-        if (sendReaction && !hasReacted) {
+        if (sendReaction && turnCount === 1 && !hasReacted) { // Only react on Turn 1
           await sendReaction(emoji);
           hasReacted = true;
         }
       }
-      round2Response = round2Response.replace(reactionRegex, '').trim();
+      response = response.replace(reactionRegex, '').trim();
 
-      while ((matchImage = imageRegex.exec(round2Response)) !== null) {
+      // 2. Clean Images
+      const imageRegex = /(?:\[\s*)?IMAGE\s*:\s*([^\s\]]+)(?:\s*\])?/gi;
+      let matchImage;
+      while ((matchImage = imageRegex.exec(response)) !== null) {
         const url = matchImage[1].trim();
         if (sendImage) await sendImage(url);
       }
-      round2Response = round2Response.replace(imageRegex, '').trim();
-      // -----------------------------------------------
+      response = response.replace(imageRegex, '').trim();
 
-      if (round2Response) {
-        await sendReply(round2Response);
-        await this.memory.addMessage('assistant', round2Response);
+      // 3. Check for Code Block
+      const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/;
+      const match = codeBlockRegex.exec(response);
+
+      if (match) {
+        // --- ACTION DETECTED ---
+        const thought = response.substring(0, match.index).trim();
+        const language = match[1] ? match[1].toLowerCase().trim() : 'bash';
+        const code = match[2];
+
+        // Send "Thought" (User sees progress)
+        if (thought) {
+          // [SILENT MODE]: User requested to hide the "Thinking..." messages.
+          // await sendReply(thought);
+          await this.memory.addMessage('assistant', thought);
+        }
+
+        console.log(`[Agent] Turn ${turnCount}: Executing ${language}...`);
+        await this.memory.addMessage('assistant', `[INTERNAL CODE]: ${code}`);
+
+        // Execute
+        let output = "";
+        try {
+          output = await this.codeSkill.execute(language || 'bash', code);
+        } catch (err: any) {
+          output = `Error: ${err.message}`;
+        }
+
+        const toolOutput = `\n[SYSTEM: Command Executed. Result Follows:]\n${output}\n`;
+
+        // PREPARE FOR NEXT TURN
+        finalPayload += `\n\n[ASSISTANT PREVIOUSLY SAID]: ${thought || "(Silent Action)"}\n[EXECUTED CODE]: ${code}\n${toolOutput}\n\nCRITICAL: 1. Review the result. 2. If done, reply to user. 3. If more steps needed, output next Code Block.`;
+
+        // Continue loop...
+      } else {
+        // --- NO CODE / FINAL REPLY ---
+        if (response) {
+          await sendReply(response);
+          await this.memory.addMessage('assistant', response);
+        }
+        break; // EXIT LOOP
       }
-    } else {
-      // No code, just talk
-      await sendReply(response);
-      await this.memory.addMessage('assistant', response);
+    }
+
+    if (turnCount >= MAX_TURNS) {
+      await sendReply("(System: Max turns reached. I stopped to prevent infinite loops.)");
     }
   }
 }
