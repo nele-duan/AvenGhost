@@ -18,11 +18,11 @@ services:
       - /:/mnt/host
       # [IDENTITY] Mount User Identity for Git
       - ~/.ssh:/root/.ssh:ro
-      - ~/.gitconfig:/root/.gitconfig:ro
+      - ~/.gitconfig:/root/.gitconfig.host:ro
     privileged: true
     pid: "host"
-    # [DEV MODE] Run from source (ts-node) to handle live edits
-    command: sh -c "npm install && npm run dev"
+    # [DEV MODE] Copy gitconfig so it is writable, then run
+    command: sh -c "cp /root/.gitconfig.host /root/.gitconfig || true && npm install && npm run dev"
     # environment:
     # You can override .env here if needed
     # - TELEGRAM_BOT_TOKEN=...

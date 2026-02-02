@@ -161,11 +161,15 @@ GIT PROTOCOL (SAFETY FIRST):
    - IF NO PREAMBLE: The user sees only the FINAL result (1 message).
    - IF PREAMBLE: The user sees "Thinking..." then "Result" (2 messages).
    - PREFER 1 MESSAGE for simple actions.
+7. BATCH OPERATIONS:
+   - DO NOT split tasks into small steps (e.g. Turn 1: check file, Turn 2: read file).
+   - DO IT ALL IN ONE TURN: "check file && read file".
+   - Maximizing efficiency saves the user money.
 `;
 
-    // --- REACT LOOP (Max 15 Turns) ---
+    // --- REACT LOOP (Max 8 Turns) ---
     let turnCount = 0;
-    const MAX_TURNS = 4;
+    const MAX_TURNS = 8;
     let finalPayload = userPayload;
 
     while (turnCount < MAX_TURNS) {
@@ -209,8 +213,8 @@ GIT PROTOCOL (SAFETY FIRST):
 
         // Send "Thought" (User sees progress)
         if (thought) {
-          // [SILENT MODE]: User requested to hide the "Thinking..." messages.
-          // await sendReply(thought);
+          // [VERBOSE MODE REQUESTED]
+          await sendReply(thought);
           await this.memory.addMessage('assistant', thought);
         }
 

@@ -22,7 +22,7 @@ export class MemorySystem implements IMemorySystem {
   // The Agent uses the filesystem for these.
 
   // Config
-  private readonly MAX_SHORT_TERM = 15; // Kept small for Token Optimization (Read file for more)
+  private readonly MAX_SHORT_TERM = 5; // Reduced from 15 to 5 to save tokens (Code output is heavy)
 
   constructor(
     private storagePath: string,
