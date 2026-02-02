@@ -12,8 +12,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install simple tools (curl, jq, sudo, docker-cli, tzdata, util-linux, git, openssh-client) for system management
-RUN apk add --no-cache curl jq sudo docker-cli tzdata util-linux git openssh-client
+# Install simple tools (curl, jq, sudo, docker-cli, tzdata, util-linux, git, openssh-client, bash) for system management
+RUN apk add --no-cache curl jq sudo docker-cli tzdata util-linux git openssh-client bash
 
 COPY package*.json ./
 RUN npm install --production
