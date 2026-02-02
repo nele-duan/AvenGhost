@@ -23,7 +23,7 @@ async function main() {
   // 1. Init Core Services
   const modelName = process.env.LLM_MODEL || 'gpt-4o';
   const llm = new LLM({ model: modelName });
-  const memory = new MemorySystem(path.join(__dirname, '../data/memory.json'), llm);
+  const memory = new MemorySystem(path.join(__dirname, '../data/memory.json'));
 
   // 2. Define Personality (The Ghost)
   // Loaded from src/character.ts

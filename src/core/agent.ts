@@ -108,6 +108,10 @@ export class Agent {
     const dynamicSystemPrompt = `${this.defaultSystemPrompt}\n\n${soulContent}\n\n${userContent}`;
 
     // 3. Memory & Context
+    // We pass null for LLM because MemorySystem is now passive (no auto-summary)
+    // Actually Agent.ts doesn't init MemorySystem, index.ts does. 
+    // We just need to update the prompt here.
+
     await this.memory.addMessage('user', message);
     let contextStr = await this.memory.getContext();
 
@@ -129,6 +133,13 @@ CRITICAL INSTRUCTION:
 1. DECIDE: Does the user want a task done?
 2. YES: Output CODE BLOCK immediately.
 3. NO: Chat naturally.
+
+MEMORY MANAGEMENT (SELF-MANAGED):
+- You have NO automatic memory. You must write things down yourself.
+- **Active Notes**: Use 'echo "note" >> data/memories/diary.md' to keep specific notes. (Markdown is best!)
+- **Deep Recall**: You can read 'cat data/chat_history.md' to see the full conversation history if you forgot something old.
+- **You Decide**: You judge what is worth saving. The system will not help you.
+
 4. REACTION: You MUST use the hidden tag [REACTION:emoji] to react.
    INVALID: "(I react with a heart)" or "*reacts*"
    LIMIT: MAX 1 reaction per message. DO NOT SPAM.

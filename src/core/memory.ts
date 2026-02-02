@@ -1,6 +1,5 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { LLM } from './llm';
 
 export interface MemoryEntry {
   role: 'user' | 'assistant' | 'system';
@@ -18,15 +17,16 @@ export interface IMemorySystem {
 
 export class MemorySystem implements IMemorySystem {
   private shortTerm: MemoryEntry[] = [];
-  private summary: string = "Nothing yet.";
-  private userProfile: string[] = [];
+
+  // No more automatic summary or profile tracking. 
+  // The Agent uses the filesystem for these.
 
   // Config
-  private readonly MAX_SHORT_TERM = 10;
+  private readonly MAX_SHORT_TERM = 50; // Increased buffer since we don't summarize
 
   constructor(
     private storagePath: string,
-    private llm: LLM // Need LLM for summarization
+    // No LLM needed for the memory system itself anymore
   ) {
     this.load().catch(() => console.log('No existing memory found, starting fresh.'));
   }
@@ -39,22 +39,29 @@ export class MemorySystem implements IMemorySystem {
       timestamp: Date.now()
     });
 
-    // Trigger optimization if buffer gets too big
-    if (this.shortTerm.length > this.MAX_SHORT_TERM * 2) {
-      await this.optimizeMemory();
+    // Simple sliding window
+    if (this.shortTerm.length > this.MAX_SHORT_TERM) {
+      // Just slice, no summarization.
+      // The Agent acts as its own archivist using files.
+      this.shortTerm = this.shortTerm.slice(-this.MAX_SHORT_TERM);
+    }
+
+    // [NEW] Persist to Markdown for readability (User Request)
+    try {
+      const mdLogPath = path.join(path.dirname(this.storagePath), 'chat_history.md');
+      const timestamp = new Date().toLocaleString();
+      const mdLine = `\n**[${timestamp}] ${role.toUpperCase()}**: ${content}\n`;
+      await fs.appendFile(mdLogPath, mdLine);
+    } catch (e) {
+      console.error('Failed to log to MD:', e);
     }
 
     await this.save();
   }
 
   async getContext(): Promise<string> {
-    // Construct the prompt context
-    // We present the "Novel Summary" first, then the recent raw chat.
     const recent = this.shortTerm.slice(-this.MAX_SHORT_TERM);
-
     return JSON.stringify({
-      summary_so_far: this.summary,
-      known_user_facts: this.userProfile,
       recent_dialogue: recent.map(m => `[${m.role.toUpperCase()}]: ${m.content}`)
     }, null, 2);
   }
@@ -63,59 +70,9 @@ export class MemorySystem implements IMemorySystem {
     return this.shortTerm.slice(-limit);
   }
 
-  // The "Optimization" Logic
-  private async optimizeMemory() {
-    console.log('[Memory] Optimizing (Compressing)...');
-
-    // 1. Identify older messages to banish to the shadow realm (summary)
-    const toSummarize = this.shortTerm.slice(0, this.shortTerm.length - this.MAX_SHORT_TERM);
-    this.shortTerm = this.shortTerm.slice(this.shortTerm.length - this.MAX_SHORT_TERM);
-
-    if (toSummarize.length === 0) return;
-
-    // 2. Ask LLM to update the summary
-    const dialogueText = toSummarize.map(m => `${m.role}: ${m.content}`).join('\n');
-
-    const prompt = `
-You are a Memory Compressor.
-Current Summary of the story: "${this.summary}"
-
-New Dialogue to merge:
-${dialogueText}
-
-INSTRUCTIONS:
-1. Update the "Current Summary" to include key events/revelations from the "New Dialogue".
-2. Write in a third-person novel style.
-3. Keep it concise but retain emotional nuance (Romance/Otome style).
-4. EXTRACT any new facts about the user (e.g. name, likes, dislikes) into a separate list.
-
-OUTPUT FORMAT:
-JSON with fields: { "new_summary": string, "new_facts": string[] }
-`;
-
-    try {
-      const resultRaw = await this.llm.chat(prompt, "Compress this memory.");
-      // Simple parsing (real implementation should use Zod/structured output)
-      const result = JSON.parse(resultRaw.replace(/```json|```/g, '').trim());
-
-      this.summary = result.new_summary || this.summary;
-      if (result.new_facts && Array.isArray(result.new_facts)) {
-        this.userProfile = [...new Set([...this.userProfile, ...result.new_facts])];
-      }
-
-      console.log('[Memory] Compressed successfully. New Summary Length:', this.summary.length);
-    } catch (err) {
-      console.error('[Memory] Compression failed:', err);
-      // If failed, we put the messages back? Or just drop them? 
-      // Ideally we shouldn't lose data, but for this simplified version we'll just log.
-    }
-  }
-
   async save(): Promise<void> {
     const data = {
       shortTerm: this.shortTerm,
-      summary: this.summary,
-      userProfile: this.userProfile
     };
     await fs.ensureDir(path.dirname(this.storagePath));
     await fs.writeJson(this.storagePath, data, { spaces: 2 });
@@ -126,8 +83,6 @@ JSON with fields: { "new_summary": string, "new_facts": string[] }
       if (await fs.pathExists(this.storagePath)) {
         const data = await fs.readJson(this.storagePath);
         this.shortTerm = data.shortTerm || [];
-        this.summary = data.summary || "Start of relationship.";
-        this.userProfile = data.userProfile || [];
       }
     } catch (e) {
       console.error('Failed to load memory', e);
