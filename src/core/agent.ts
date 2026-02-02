@@ -175,6 +175,8 @@ GIT PROTOCOL (SAFETY FIRST):
     while (turnCount < MAX_TURNS) {
       turnCount++;
 
+      turnCount++;
+
       // Chat with LLM
       let response = await this.llm.chat(systemInstruction, finalPayload);
       response = response ? response.trim() : "";
@@ -246,7 +248,8 @@ GIT PROTOCOL (SAFETY FIRST):
     }
 
     if (turnCount >= MAX_TURNS) {
-      await sendReply("(System: Max turns reached. I stopped to prevent infinite loops.)");
+      console.log("[Agent] Turn limit reached. Stopping loop.");
+      // await sendReply("(System: Max turns reached. I stopped to prevent infinite loops.)");
     }
   }
 }
