@@ -199,12 +199,13 @@ MEMORY MANAGEMENT (SELF-MANAGED):
         await this.memory.addMessage('assistant', thought);
 
         // CRITICAL FIX: Update userPayload so Round 2 sees this message!
-        userPayload += `\n\n[ASSISTANT PREVIOUSLY SAID]:\n${thought}`;
+        // Actually, we will NOT reuse userPayload for Round 2 anymore. 
+        // We will build a dedicated "Reflection Prompt" to avoid the "Fresh Input" bias.
       }
 
       console.log(`[Agent] Executing Internal Code (${language})...`);
 
-      // Store code in memory as INTERNAL so it's in context but not shown to user again.
+      // Store code in memory as INTERNAL
       await this.memory.addMessage('assistant', `[INTERNAL CODE]: ${code}`);
 
       // Execute
@@ -212,11 +213,19 @@ MEMORY MANAGEMENT (SELF-MANAGED):
       const toolOutput = `\n[SYSTEM: Command Executed. Result Follows:]\n${output}\n`;
 
       // --- ROUND 2: Reflect & Final Reply ---
-      const round2Prompt = `
-${userPayload}
+      // We construct a NEW prompt focused purely on the RESULT.
+      // We do NOT include the full 'userPayload' to prevent re-triggering the "New Message" reflex.
 
-ASSISTANT PREVIOUSLY SAID:
-${thought || "(No text, just action)"}
+      const round2Prompt = `
+CONTEXT HISTORY:
+${contextStr}
+
+---
+ORIGINAL USER REQUEST:
+${message}
+
+YOUR IMMEDIATE ACTION (Just Performed):
+${thought || "(Silent Action)"}
 
 EXECUTED CODE (Hidden from user):
 ${code}
@@ -225,10 +234,13 @@ SYSTEM TOOL OUTPUT:
 ${toolOutput}
 
 CRITICAL INSTRUCTION:
-1. You have ALREADY told the user what you are doing (see "PREVIOUSLY SAID").
-2. DO NOT repeat your plan. 
-3. Report the result of the action or answer the user's question based on the Tool Output.
-4. Keep it conversational.
+1. The action is COMPLETE. The code has RUN.
+2. DO NOT repeat the plan ("I will now...").
+3. DO NOT repeat the user's request ("You asked me to...").
+4. FOCUS ONLY on the SYSTEM TOOL OUTPUT.
+5. Provide the answer/insight directly to the user.
+6. If the output is an error, explain it.
+7. Keep it conversational (Otome Style).
 `;
       let round2Response = await this.llm.chat(systemInstruction, round2Prompt);
       round2Response = round2Response ? round2Response.trim() : "";
