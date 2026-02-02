@@ -98,7 +98,7 @@ export class Agent {
         }
         await fs.writeFile(userPath, userContent);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('[Agent] Error loading Dynamic Identity:', e);
     }
 
