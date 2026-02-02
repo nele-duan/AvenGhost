@@ -21,6 +21,8 @@ services:
       - ~/.gitconfig:/root/.gitconfig:ro
     privileged: true
     pid: "host"
+    # [DEV MODE] Run from source (ts-node) to handle live edits
+    command: sh -c "npm install && npm run dev"
     # environment:
     # You can override .env here if needed
     # - TELEGRAM_BOT_TOKEN=...
