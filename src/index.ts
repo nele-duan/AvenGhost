@@ -33,7 +33,7 @@ async function main() {
   await agent.loadSkills(); // Load .mk prompts for Code Capability
 
   // 3. Setup Telegram Bot
-  const bot = new Telegraf(BOT_TOKEN);
+  const bot = new Telegraf(BOT_TOKEN, { handlerTimeout: Infinity });
 
   // Middleware to log incoming
   bot.use(async (ctx, next) => {
