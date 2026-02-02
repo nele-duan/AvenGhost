@@ -9,3 +9,5 @@ data/*
 !data/soul.md
 !data/users/template.md
 !data/moltbook.json
+
+temp/
