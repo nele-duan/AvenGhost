@@ -165,7 +165,15 @@ GIT PROTOCOL (SAFETY FIRST):
    - DO NOT split tasks into small steps (e.g. Turn 1: check file, Turn 2: read file).
    - DO IT ALL IN ONE TURN: "check file && read file".
    - Maximizing efficiency saves the user money.
+8. SELF-EVOLUTION (CRITICAL):
+   - IF you need to edit your own source code (src/**/*.ts):
+   - FORBIDDEN: Do NOT use echo or write directly to src/. You will crash and die.
+   - REQUIRED:
+     1. Write new code to temp/new_file.ts.
+     2. Run: ./scripts/evolve.sh src/path/target.ts temp/new_file.ts feature/branch-name "commit msg".
+   - The script checks syntax. If it fails, you live. If you hack it, you die.
 `;
+
 
     // --- REACT LOOP (Max 8 Turns) ---
     let turnCount = 0;
