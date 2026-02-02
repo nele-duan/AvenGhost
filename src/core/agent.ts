@@ -175,9 +175,9 @@ GIT PROTOCOL (SAFETY FIRST):
 `;
 
 
-    // --- REACT LOOP (Max 8 Turns) ---
+    // --- REACT LOOP (Max 20 Turns) ---
     let turnCount = 0;
-    const MAX_TURNS = 8;
+    const MAX_TURNS = 20;
     let finalPayload = userPayload;
 
     while (turnCount < MAX_TURNS) {
