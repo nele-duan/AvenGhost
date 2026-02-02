@@ -73,7 +73,7 @@ async function main() {
 
       await agent.processMessage(userId, message, async (replyText) => {
         if (replyText && replyText.trim() !== "") {
-          await ctx.reply(replyText, { parse_mode: 'Markdown' }); // Enable Markdown for links
+          await ctx.reply(replyText); // Disable Markdown to prevent crashes with underscores
         }
       }, reactCallback, imageCallback);
     } catch (e) {
