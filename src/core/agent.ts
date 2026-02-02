@@ -53,7 +53,7 @@ export class Agent {
         }
       }
       console.log(`[Agent] Loaded ${loadedCount} skill prompts from ${skillsDir}`);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error loading skills:', e);
     }
   }
@@ -181,8 +181,6 @@ GIT PROTOCOL (SAFETY FIRST):
     let finalPayload = userPayload;
 
     while (turnCount < MAX_TURNS) {
-      turnCount++;
-
       turnCount++;
 
       // Chat with LLM

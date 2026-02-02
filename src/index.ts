@@ -90,7 +90,7 @@ async function main() {
 
   // 5. Launch Bot
   console.log('AvenGhost is online...');
-  bot.launch(() => {
+  bot.launch({ dropPendingUpdates: true }, () => {
     console.log('Bot successfully connected to Telegram.');
   });
 
