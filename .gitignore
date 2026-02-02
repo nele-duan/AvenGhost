@@ -1,1 +1,11 @@
 node_modules
+dist
+.env
+
+# Ignore all Agent Data by default (Diaries, history, etc.)
+data/*
+
+# Whitelist: Core Config Files to be tracked
+!data/soul.md
+!data/users/template.md
+!data/moltbook.json
