@@ -73,7 +73,12 @@ async function main() {
 
       await agent.processMessage(userId, message, async (replyText) => {
         if (replyText && replyText.trim() !== "") {
-          await ctx.reply(replyText); // Disable Markdown to prevent crashes with underscores
+          try {
+            await ctx.reply(replyText, { parse_mode: 'Markdown' }); // Try Pretty
+          } catch (e) {
+            console.log('[Telegram] Markdown failed, falling back to plain text:', e);
+            await ctx.reply(replyText); // Fallback to Safe
+          }
         }
       }, reactCallback, imageCallback);
     } catch (e) {

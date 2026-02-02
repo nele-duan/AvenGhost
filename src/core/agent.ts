@@ -227,20 +227,24 @@ GIT PROTOCOL (SAFETY FIRST):
         }
 
         console.log(`[Agent] Turn ${turnCount}: Executing ${language}...`);
-        await this.memory.addMessage('assistant', `[INTERNAL CODE]: ${code}`);
+
+        // [UX] Send the code block to the user so they see what is running (Pretty Printed)
+        await sendReply(`\`\`\`${language}\n${code}\n\`\`\`);
+
+        await this.memory.addMessage('assistant', `[INTERNAL CODE]: ${ code }`);
 
         // Execute
         let output = "";
         try {
           output = await this.codeSkill.execute(language || 'bash', code);
         } catch (err: any) {
-          output = `Error: ${err.message}`;
+          output = `Error: ${ err.message }`;
         }
 
-        const toolOutput = `\n[SYSTEM: Command Executed. Result Follows:]\n${output}\n`;
+        const toolOutput = `\n[SYSTEM: Command Executed.Result Follows:]\n${ output }\n`;
 
         // PREPARE FOR NEXT TURN
-        finalPayload += `\n\n[ASSISTANT PREVIOUSLY SAID]: ${thought || "(Silent Action)"}\n[EXECUTED CODE]: ${code}\n${toolOutput}\n\nCRITICAL: 1. Review the result. 2. If done, reply to user. 3. If more steps needed, output next Code Block.`;
+        finalPayload += `\n\n[ASSISTANT PREVIOUSLY SAID]: ${ thought || "(Silent Action)"} \n[EXECUTED CODE]: ${ code } \n${ toolOutput } \n\nCRITICAL: 1. Review the result. 2. If done, reply to user. 3. If more steps needed, output next Code Block.`;
 
         // Continue loop...
       } else {

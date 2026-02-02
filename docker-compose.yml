@@ -23,6 +23,7 @@ services:
     pid: "host"
     # [DEV MODE] Copy gitconfig so it is writable, then run
     command: sh -c "cp /root/.gitconfig.host /root/.gitconfig || true && npm install && npm run dev"
-    # environment:
+    environment:
+      - TZ=Asia/Tokyo
     # You can override .env here if needed
     # - TELEGRAM_BOT_TOKEN=...
