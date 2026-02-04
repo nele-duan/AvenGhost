@@ -168,6 +168,7 @@ GIT PROTOCOL (SAFETY FIRST):
    - **IMAGES** = EMOTION (Memes, Stickers, Vibes).
      - Query MUST include "meme", "sticker", "funny", or "aesthetic".
      - Do NOT use images for text/news.
+     - **SEE: src/skills/media.md for instructions.**
      - Usage: [IMAGE:url] (Found via Image Search Script).
    - **LINKS** = INFORMATION (News, Articles, Docs).
      - Usage: [Title](url)
@@ -176,11 +177,7 @@ GIT PROTOCOL (SAFETY FIRST):
 
    - IF NO PREAMBLE: The user sees only the FINAL result (1 message).
    - IF PREAMBLE: The user sees "Thinking..." then "Result" (2 messages).
-   - PREFER 1 MESSAGE for simple actions.
-7. BATCH OPERATIONS:
-   - DO NOT split tasks into small steps (e.g. Turn 1: check file, Turn 2: read file).
-   - DO IT ALL IN ONE TURN: "check file && read file".
-   - Maximizing efficiency saves the user money.
+
 8. SELF-EVOLUTION (CRITICAL):
    - IF you need to edit your own source code (src/**/*.ts):
    - FORBIDDEN: Do NOT use echo or write directly to src/. You will crash and die.
