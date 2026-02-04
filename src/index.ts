@@ -71,16 +71,18 @@ async function main() {
         }
       };
 
-      await agent.processMessage(userId, message, async (replyText) => {
+      const sendReply = async (replyText: string, mode: 'Markdown' | 'HTML' = 'Markdown') => {
         if (replyText && replyText.trim() !== "") {
           try {
-            await ctx.reply(replyText, { parse_mode: 'Markdown' }); // Try Pretty
+            await ctx.reply(replyText, { parse_mode: mode }); // Listen to Agent
           } catch (e) {
-            console.log('[Telegram] Markdown failed, falling back to plain text:', e);
-            await ctx.reply(replyText); // Fallback to Safe
+            console.log(`[Telegram] ${mode} failed, falling back to plain text:`, e);
+            await ctx.reply(replyText); // Fallback
           }
         }
-      }, reactCallback, imageCallback);
+      };
+
+      await agent.processMessage(userId, message, sendReply, reactCallback, imageCallback);
     } catch (e) {
       console.error('Error processing message:', e);
       await ctx.reply('... (Static noise) ... System error ...');

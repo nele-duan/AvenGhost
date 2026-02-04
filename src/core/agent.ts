@@ -244,21 +244,11 @@ GIT PROTOCOL (SAFETY FIRST):
 
         console.log(`[Agent] Turn ${turnCount}: Executing ${language}...`);
 
-        // [UX] Send the code block to the user using HTML for safety and beauty
-        // Helper to escape HTML characters
-        const escapeHtml = (unsafe: string) => {
-          return unsafe
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-        };
+        // [UX] Send the code block using Markdown for better compatibility
+        const codeBlock = "```" + language + "\n" + code + "\n```";
 
-        const codeBlock = "<pre><code class=\"language-" + language + "\">" + escapeHtml(code) + "</code></pre>";
-
-        // Pass 'HTML' as the second argument to sendReply
-        await sendReply(codeBlock, 'HTML');
+        // Pass 'Markdown' as the second argument to sendReply
+        await sendReply(codeBlock, 'Markdown');
 
         await this.memory.addMessage('assistant', `[INTERNAL CODE]: ${code}`);
 
