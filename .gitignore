@@ -6,7 +6,6 @@ dist
 data/*
 
 # Whitelist: Core Config Files to be tracked
-!data/soul.md
 !data/users/template.md
 !data/moltbook.json
 

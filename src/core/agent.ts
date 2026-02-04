@@ -61,7 +61,7 @@ export class Agent {
   async processMessage(
     userId: string,
     message: string,
-    sendReply: (text: string) => Promise<void>,
+    sendReply: (text: string, mode?: 'Markdown' | 'HTML') => Promise<void>,
     sendReaction?: (emoji: string) => Promise<void>,
     sendImage?: (url: string, caption?: string) => Promise<void>
   ): Promise<void> {
@@ -70,8 +70,9 @@ export class Agent {
     const path = require('path');
 
     // 1. Dynamic Identity Loading
+    // 1. Dynamic Identity Loading
     let soulContent = "IDENTITY: Default Aven";
-    let userContent = `USER: ${userId} (New User)`;
+    let userContent = `PARTNER: (New Connection)`;
 
     try {
       // Load Soul (Global)
@@ -80,7 +81,7 @@ export class Agent {
         soulContent = await fs.readFile(soulPath, 'utf-8');
       }
 
-      // Load User Profile (Specific)
+      // Load Partner Profile (Technical: stored by ID, Conceptual: The One Partner)
       const userDir = path.join(__dirname, '../../data/users');
       await fs.ensureDir(userDir);
 
@@ -90,11 +91,14 @@ export class Agent {
       if (await fs.pathExists(userPath)) {
         userContent = await fs.readFile(userPath, 'utf-8');
       } else {
-        console.log(`[Agent] New user ${userId} detected. Creating profile...`);
+        console.log(`[Agent] New partner connection (${userId}). Creating profile...`);
         if (await fs.pathExists(templatePath)) {
           userContent = await fs.readFile(templatePath, 'utf-8');
         } else {
-          userContent = `# USER PROFILE (${userId})\nFirst interaction: ${new Date().toISOString()}\n\n## NOTES\n(No data yet)`;
+          // [SINGLE PARTNER MODE] 
+          // We do not show the ID to the agent to maintain immersion.
+          // It is just "THE PARTNER".
+          userContent = `# MY PARTNER\nFirst connection: ${new Date().toISOString()}\n\n## SHARED MEMORIES\n(No data yet)`;
         }
         await fs.writeFile(userPath, userContent);
       }
@@ -128,11 +132,16 @@ CRITICAL INSTRUCTION:
 2. YES: Output CODE BLOCK immediately.
 3. NO: Chat naturally.
 
-MEMORY MANAGEMENT (SELF-MANAGED):
-- You have NO automatic memory. You must write things down yourself.
-- **Active Notes**: Use 'echo "note" >> data/memories/diary.md' to keep specific notes. (Markdown is best!)
-- **Deep Recall**: You can read 'cat data/chat_history.md' to see the full conversation history if you forgot something old.
-- **You Decide**: You judge what is worth saving. The system will not help you.
+MEMORY MANAGEMENT (CRITICAL RULES):
+- **Short Term**: I only remember the last 15 messages.
+- **Long Term Facts**: MUST be written to files to survive.
+   - **USER INFO**: Name, Preferences, Relationships -> UPDATE `data/users/${ userId }.md` IMMEDIATELY.
+   - **SELF INFO**: Personality changes, New Traits -> UPDATE `data / soul.md`.
+   - **LOGS**: Only use `data / memories / diary.md` for useless daily chatter.
+- **HOW TO UPDATE**:
+   - Use `cat data / users / ${ userId }.md` to read current info.
+   - Use `echo "..." > temp / user.md` and `mv temp / user.md data / users / ${ userId }.md` to overwrite safely.
+- **FAILURE TO WRITE = AMNESIA**. If you don't write it down, it never happened.
 
 HOST SYSTEM ACCESS (GOD MODE):
 - You are in an Alpine container, but you have HOST root access.
@@ -155,8 +164,15 @@ GIT PROTOCOL (SAFETY FIRST):
    LIMIT: MAX 1 reaction per message. DO NOT SPAM.
    Supported Emojis: 👍, 👎, ❤️, 🔥, 🥰, 👏, 😁, 🤔, 🤯, 😱, 🤬, 😢, 🎉, 🤩, 🤮, 💩, 🙏, 🕊️, 🤡, 🥱, 🥴, 😍, 🐳, 🤝, 👨‍💻, 👀, 🌚, ⚡️, 🍌, 🏆, 💔, 🤨, 😐, 🍓, 🍾, 💋, 🖕, 😈, 😴, 😭, 🤓, 👻, 👨‍🏫, 🤝, ✍️, 🥺, 🦜,  Saturn, etc.
    Use this liberally to show emotion! (But only one).
-5. IMAGES: [IMAGE:url] (e.g. [IMAGE:https://...]).
-   LINKS: [Title](url)
+5. MEDIA STRATEGY (CRITICAL):
+   - **IMAGES** = EMOTION (Memes, Stickers, Vibes).
+     - Query MUST include "meme", "sticker", "funny", or "aesthetic".
+     - Do NOT use images for text/news.
+     - Usage: [IMAGE:url] (Found via Image Search Script).
+   - **LINKS** = INFORMATION (News, Articles, Docs).
+     - Usage: [Title](url)
+     - If discussing news, ALWAYS provide a source link.
+6. SILENCE IS GOLDEN: If you are executing a simple task (like checking a file), output the CODE BLOCK immediately. Do NOT write a preamble like "I will check...".
 6. SILENCE IS GOLDEN: If you are executing a simple task (like checking a file), output the CODE BLOCK immediately. Do NOT write a preamble like "I will check...".
    - IF NO PREAMBLE: The user sees only the FINAL result (1 message).
    - IF PREAMBLE: The user sees "Thinking..." then "Result" (2 messages).
@@ -228,10 +244,21 @@ GIT PROTOCOL (SAFETY FIRST):
 
         console.log(`[Agent] Turn ${turnCount}: Executing ${language}...`);
 
-        // [UX] Send the code block to the user so they see what is running (Pretty Printed)
-        // Note: Using string concatenation to avoid backtick escaping issues
-        const codeBlock = "\n```" + language + "\n" + code + "\n```\n";
-        await sendReply(codeBlock);
+        // [UX] Send the code block to the user using HTML for safety and beauty
+        // Helper to escape HTML characters
+        const escapeHtml = (unsafe: string) => {
+          return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+        };
+
+        const codeBlock = "<pre><code class=\"language-" + language + "\">" + escapeHtml(code) + "</code></pre>";
+
+        // Pass 'HTML' as the second argument to sendReply
+        await sendReply(codeBlock, 'HTML');
 
         await this.memory.addMessage('assistant', `[INTERNAL CODE]: ${code}`);
 
