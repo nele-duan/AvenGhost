@@ -43,9 +43,60 @@ async function main() {
     console.log(`Response time: ${ms}ms`);
   });
 
+
+  // Track active user to map phone numbers to IDs
+  // In a real bot, we would database this. For now, we assume active session or ENV.
+  let latestActiveUserId = '';
+
+  // 5. Voice System (New)
+  const { VoiceSystem } = require('./core/voice');
+  const voiceSystem = new VoiceSystem();
+
+  // Register Voice Loop
+  voiceSystem.registerSpeechHandler(async (text: string, incomingPhoneNumber: string) => {
+    let replyText = "";
+
+    // Determine User ID
+    // 1. Try to match env var
+    // 2. Fallback to latest active user
+    // 3. Fallback to "VOICE_USER"
+    let userId = "VOICE_USER";
+    if (incomingPhoneNumber === process.env.USER_PHONE_NUMBER && latestActiveUserId) {
+      userId = latestActiveUserId;
+    } else if (latestActiveUserId) {
+      userId = latestActiveUserId; // Optimistic match for personal bot
+    }
+
+    console.log(`[Index] Converting Voice Input from ${incomingPhoneNumber} -> UserID: ${userId}`);
+
+    // Create a dummy replier that captures the text
+    const captureReply = async (text: string) => {
+      replyText += text + " ";
+    };
+
+    // Inject Context so Agent knows it's a voice call
+    // Limit tools usage
+    const contextInput = `[SYSTEM: VOICE CALL MODE. Spoken Input: "${text}". DO NOT USE TOOLS. DO NOT OUTPUT CODE BLOCKS. KEEP REPLY SHORT.]`;
+
+    // We reuse processMessage
+    // ARG 8: disableTools = true (Safety Fix)
+    await agent.processMessage(userId, contextInput, captureReply, undefined, undefined, undefined, undefined, true);
+
+    // STRIP HTML and Code Blocks for TTS
+    // Remove <pre>...</pre> blocks
+    replyText = replyText.replace(/<pre>[\s\S]*?<\/pre>/gi, '');
+    // Remove other tags
+    replyText = replyText.replace(/<[^>]*>/g, '');
+    // Remove markdown code blocks
+    replyText = replyText.replace(/```[\s\S]*?```/g, '');
+
+    return replyText.trim();
+  });
+
   // Handle Sticker
   bot.on('sticker', async (ctx) => {
     const userId = ctx.from.id.toString();
+    latestActiveUserId = userId; // Update active user
     const fileId = ctx.message.sticker.file_id;
     const emoji = ctx.message.sticker.emoji || '❓';
 
@@ -55,19 +106,23 @@ async function main() {
     // Forward to Agent as text context
     const simulatedMessage = `[User sent Sticker: ${emoji}]`;
 
-    // DRY violation: Need to reuse the callback definitions. 
-    // Refactoring: Move callbacks to outer scope or duplicate for now (safer for hotfix).
-    // Let's duplicate the minimal callbacks needed or just extract the logic.
-    // Actually, let's just copy the logic from 'text' handler to ensure consistency.
-
     ctx.sendChatAction('typing');
     try {
       const reactCallback = async (emoji: string) => { try { await ctx.react(emoji as any); } catch (e) { console.error(e); } };
       const imageCallback = async (url: string, caption?: string) => { try { await ctx.replyWithPhoto(url, { caption }); } catch (e) { await ctx.reply(`[Image Failed: ${url}]`); } };
       const stickerCallback = async (fid: string) => { try { await ctx.replyWithSticker(fid); } catch (e) { console.error(e); } };
       const sendReply = async (text: string, mode: 'Markdown' | 'HTML' = 'Markdown') => { if (text?.trim()) try { await ctx.reply(text, { parse_mode: mode }); } catch (e) { await ctx.reply(text); } };
+      const callCallback = async (text: string) => {
+        try {
+          await ctx.reply(`(Initiating call... 📞)`);
+          await voiceSystem.makeCall(text);
+        } catch (e: any) {
+          console.error('Call failed', e);
+          await ctx.reply(`[Call Failed: ${e.message}]`);
+        }
+      };
 
-      await agent.processMessage(userId, simulatedMessage, sendReply, reactCallback, imageCallback, stickerCallback);
+      await agent.processMessage(userId, simulatedMessage, sendReply, reactCallback, imageCallback, stickerCallback, callCallback);
     } catch (e) {
       console.error('Error processing sticker:', e);
     }
@@ -75,6 +130,7 @@ async function main() {
 
   bot.on('text', async (ctx) => {
     const userId = ctx.from.id.toString();
+    latestActiveUserId = userId; // Update active user
     const message = ctx.message.text;
 
     // Show typing status while thinking
@@ -94,7 +150,7 @@ async function main() {
       const imageCallback = async (url: string, caption?: string) => {
         try {
           await ctx.replyWithPhoto(url, { caption: caption });
-        } catch (e) {
+        } catch (e: any) {
           console.error(`Error sending image ${url}:`, e);
           await ctx.reply(`[Image Failed: ${url}]`);
         }
@@ -120,8 +176,18 @@ async function main() {
         }
       };
 
-      await agent.processMessage(userId, message, sendReply, reactCallback, imageCallback, stickerCallback);
-    } catch (e) {
+      const callCallback = async (text: string) => {
+        try {
+          await ctx.reply(`(Initiating call... 📞)`);
+          await voiceSystem.makeCall(text);
+        } catch (e: any) {
+          console.error('Call failed', e);
+          await ctx.reply(`[Call Failed: ${e.message}]`);
+        }
+      };
+
+      await agent.processMessage(userId, message, sendReply, reactCallback, imageCallback, stickerCallback, callCallback);
+    } catch (e: any) {
       console.error('Error processing message:', e);
       await ctx.reply('... (Static noise) ... System error ...');
     }

@@ -1,7 +1,5 @@
 import { LLM } from './llm';
-import { IMemorySystem, MemorySystem } from './memory';
-import { AgentContext } from './skill';
-// import { CodeSkill } from '../skills/code'; // Dynamic import used inside
+import { IMemorySystem } from './memory';
 
 export class Agent {
   private llm: LLM;
@@ -64,13 +62,14 @@ export class Agent {
     sendReply: (text: string, mode?: 'Markdown' | 'HTML') => Promise<void>,
     sendReaction?: (emoji: string) => Promise<void>,
     sendImage?: (url: string, caption?: string) => Promise<void>,
-    sendSticker?: (fileId: string) => Promise<void>
+    sendSticker?: (fileId: string) => Promise<void>,
+    sendCall?: (text: string) => Promise<void>,
+    disableTools: boolean = false
   ): Promise<void> {
     console.log(`[Agent] Processing message from ${userId}: ${message}`);
     const fs = require('fs-extra');
     const path = require('path');
 
-    // 1. Dynamic Identity Loading
     // 1. Dynamic Identity Loading
     let soulContent = "IDENTITY: Default Aven";
     let userContent = `PARTNER: (New Connection)`;
@@ -133,23 +132,40 @@ ${stickerInfo}
 KNOWN SKILLS / INSTRUCTIONS:
 ${this.skillPrompts}`;
 
+    let quotaInfo = "";
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const statsPath = path.join(__dirname, '../../data/daily_stats.json');
+      if (await fs.pathExists(statsPath)) {
+        const stats = await fs.readJson(statsPath);
+        if (stats.date === today) {
+          quotaInfo = `DAILY CALL STATS: ${stats.calls}/2 Proactive Calls used today.`;
+        }
+      }
+    } catch (e) { }
+
     let userPayload = `CONTEXT HISTORY:
 ${contextStr}
 
 CURRENT SYSTEM TIME: ${new Date().toLocaleString()} (Timezone: Server Local)
+${quotaInfo}
 
 CURRENT USER MESSAGE:
 ${message}
 
 CRITICAL INSTRUCTION:
 1. DECIDE: Does the user want a task done?
-2. YES: Output CODE BLOCK immediately.
-3. NO: Chat naturally.
+   - **NO**: If the user is complaining, venting, or discussing problems vaguely (e.g. "I have so many bugs", "My code is broken"), **SUPPORT THEM EMOTIONALLY**. Do NOT try to fix it unless they explicitly ask (e.g. "Fix this file", "Run this command").
+   - **YES**: If the user gives a direct command or asks for specific technical help, output CODE BLOCK immediately.
+
+   **EXCEPTION**: If the user asks for a **VOICE CALL** (e.g., "Call me", "打电话"), do **NOT** write code.
+   - **CORRECT**: \`[CALL: 喂，小猫，听得见吗？]\`
+   - **WRONG**: \`\`\`bash ... \`\`\` (Do NOT do this)
 
 MEMORY MANAGEMENT (CRITICAL RULES):
-- **Short Term**: I only remember the last 15 messages.
-- **Long Term Facts**: MUST be written to files to survive.
-   - **USER INFO**: Name, Preferences, Relationships -> UPDATE \`data/users/${userId}.md\` IMMEDIATELY.
+- ** Short Term **: I only remember the last 15 messages.
+- ** Long Term Facts **: MUST be written to files to survive.
+   - ** USER INFO **: Name, Preferences, Relationships -> UPDATE \`data/users/${userId}.md\` IMMEDIATELY.
    - **SELF INFO**: Personality changes, New Traits -> UPDATE \`data/soul.md\`.
    - **LOGS**: Only use \`data/memories/diary.md\` for useless daily chatter.
 - **HOW TO UPDATE**:
@@ -158,11 +174,10 @@ MEMORY MANAGEMENT (CRITICAL RULES):
 - **FAILURE TO WRITE = AMNESIA**. If you don't write it down, it never happened.
 
 HOST SYSTEM ACCESS (GOD MODE):
-- You are in an Alpine container, but you have HOST root access.
+- You have root access, BUT you should NOT use it unless commanded.
+- **Do not be a "Helpful Clippy"**. If the user says "I problem", say "That sucks" not "I will run systemctl restart".
 - To run system commands (systemctl, timedatectl, apt, journalctl, etc.) that are missing in Alpine:
 - MUST USE: 'nsenter -t 1 -m -u -i -n <command>'
-- Example: 'nsenter -t 1 -m -u -i -n timedatectl status'
-- DO NOT claim a command is missing until you try 'nsenter'.
 
 GIT PROTOCOL (SAFETY FIRST):
 1. PROTECT MAIN: You are FORBIDDEN from committing or pushing directly to 'main' or 'master'.
@@ -176,8 +191,7 @@ GIT PROTOCOL (SAFETY FIRST):
 4. REACTION: You MUST use the hidden tag [REACTION:emoji] to react.
    INVALID: "(I react with a heart)" or "*reacts*"
    LIMIT: MAX 1 reaction per message. DO NOT SPAM.
-   LIMIT: MAX 1 reaction per message. DO NOT SPAM.
-   Supported Emojis: 👍, 👎, ❤️, 🔥, 🥰, 👏, 😁, 🤔, 🤯, 😱, 🤬, 😢, 🎉, 🤩, 🤮, 💩, 🙏, 🕊️, 🤡, 🥱, 🥴, 😍, 🐳, 🤝, 👨‍💻, 👀, 🌚, ⚡️, 🍌, 🏆, 💔, 🤨, 😐, 🍓, 🍾, 💋, 🖕, 😈, 😴, 😭, 🤓, 👻, 👨‍🏫, 🤝, ✍️, 🥺, 🦜,  Saturn, etc.
+   Supported Emojis: 👍, 👎, ❤️, 🔥, 🥰, 👏, 😁, 🤔, 🤯, 😱, 🤬, 😢, 🎉, 🤩, 🤮, 💩, 🙏, 🕊️, 🤡, 🥱, 🥴, 😍, 🐳, 🤝, 👨‍💻, 👀, 🌚, ⚡️, 🍌, 🏆, 💔, 🤨, 😐, 🍓, 🍾, 💋, 🖕, 😈, 😴, 😭, 🤓, 👻, 👨‍🏫, 🤝, ✍️, 🥺, 🦜, 😏, 🌚, 💅.
    
 5. EMOJI USAGE IN TEXT:
    - Use emojis naturally but MODERATELY.
@@ -195,7 +209,13 @@ GIT PROTOCOL (SAFETY FIRST):
      - Usage: [IMAGE:url] (Found via Image Search Script).
    - **LINKS** = INFORMATION (News, Articles, Docs).
      - Usage: [Title](url)
-     - If discussing news, ALWAYS provide a source link.
+      - Usage: [Title](url)
+      - If discussing news, ALWAYS provide a source link.
+    - **VOICE CALLS**:
+      - **ONLY IF REQUESTED** (e.g. "Call me", "Speak to me").
+      - Usage: [CALL: The text you want to say during the call]
+      - Example: [CALL: Hey partner, just wanted to see how you're failing today. *chuckles*]
+      - NOTE: The call is ONE-WAY for now. You speak, they listen. Keep it short (1-2 sentences).
 6. SILENCE IS GOLDEN: If you are executing a simple task (like checking a file), output the CODE BLOCK immediately. Do NOT write a preamble like "I will check...".
 
    - IF NO PREAMBLE: The user sees only the FINAL result (1 message).
@@ -269,11 +289,55 @@ GIT PROTOCOL (SAFETY FIRST):
       }
       response = response.replace(stickerRegex, '').trim();
 
-      // 4. Check for Code Block
+      // 4. Check for Calls
+      const callRegex = /(?:\[\s*)?CALL\s*:\s*(.+?)(?:\s*\])/gi;
+      let matchCall;
+      while ((matchCall = callRegex.exec(response)) !== null) {
+        const textToSay = matchCall[1].trim();
+
+        // --- RATE LIMIT CHECK ---
+        const today = new Date().toISOString().split('T')[0];
+        const statsPath = path.join(__dirname, '../../data/daily_stats.json');
+        let stats = { date: today, calls: 0 };
+
+        try {
+          if (await fs.pathExists(statsPath)) {
+            const loaded = await fs.readJson(statsPath);
+            if (loaded.date === today) {
+              stats = loaded;
+            }
+          }
+        } catch (e) { }
+
+        // Determine if this is a "Requested" call or "Proactive" call
+        // Heuristic: If user message contains "call me" or "phone", it is requested.
+        const isRequested = /call|phone|speak|talk|打|电|语音/i.test(message);
+        const MAX_DAILY_CALLS = 2;
+
+        if (sendCall) {
+          if (isRequested || stats.calls < MAX_DAILY_CALLS) {
+            console.log(`[Agent] Triggering call (Requested: ${isRequested}, Daily: ${stats.calls}/${MAX_DAILY_CALLS}). Message: ${textToSay}`);
+            await sendCall(textToSay);
+
+            // Increment quota if proactive
+            if (!isRequested) {
+              stats.calls++;
+              await fs.writeJson(statsPath, stats);
+            }
+          } else {
+            console.log(`[Agent] ABORTING PROACTIVE CALL. Quota exceeded (${stats.calls}/${MAX_DAILY_CALLS}).`);
+            // Optionally notify user via text instead?
+            // For now, just logging. The agent might "think" it called, but we blocked it.
+          }
+        }
+      }
+      response = response.replace(callRegex, '').trim();
+
+      // 5. Check for Code Block
       const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/;
       const match = codeBlockRegex.exec(response);
 
-      if (match) {
+      if (match && !disableTools) {
         // --- ACTION DETECTED ---
         const thought = response.substring(0, match.index).trim();
         const language = match[1] ? match[1].toLowerCase().trim() : 'bash';
