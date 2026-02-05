@@ -214,11 +214,14 @@ export class VoiceSystem {
       });
 
       // 2. Send to Whisper
-      // Note: OpenRouter might NOT support this endpoint.
-      // If using OpenRouter for LLM, user should likely use Groq for STT.
+      const isGroq = baseURL?.includes('groq.com');
+      const modelName = process.env.STT_MODEL || (isGroq ? 'whisper-large-v3' : 'whisper-1');
+
+      console.log(`[VoiceSystem] Using Model: ${modelName} (BaseURL: ${baseURL})`);
+
       const transcription = await openai.audio.transcriptions.create({
         file: fs.createReadStream(tempFile),
-        model: "whisper-1", // Or 'whisper-large-v3' for Groq
+        model: modelName,
         language: "zh" // Hint Chinese
       });
 
