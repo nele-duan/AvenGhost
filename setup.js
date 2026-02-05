@@ -80,25 +80,24 @@ async function main() {
   }
 
   envContent += `BRAVE_SEARCH_API_KEY=${braveKey}\n`;
+  if (twilioSid) {
+    envContent += `TWILIO_ACCOUNT_SID=${twilioSid}\n`;
+    envContent += `TWILIO_AUTH_TOKEN=${twilioAuth}\n`;
+    envContent += `TWILIO_PHONE_NUMBER=${twilioNumber}\n`;
+    envContent += `USER_PHONE_NUMBER=${userPhone}\n`;
+    envContent += `ELEVENLABS_API_KEY=${elevenKey}\n`;
+    envContent += `ELEVENLABS_VOICE_ID=${elevenVoiceId}\n`;
+    envContent += `ELEVENLABS_MODEL_ID=${elevenModel}\n`;
+    envContent += `NGROK_AUTH_TOKEN=${ngrokToken}\n`;
+  }
+
+  const envPath = path.join(process.cwd(), '.env');
+  fs.writeFileSync(envPath, envContent);
+
+  console.log('\n✅ Configuration saved to .env!');
+  console.log('You can now run "npm install" and then "npm start", or just "docker-compose up".');
+
+  rl.close();
 }
-
-if (twilioSid) {
-  envContent += `TWILIO_ACCOUNT_SID=${twilioSid}\n`;
-  envContent += `TWILIO_AUTH_TOKEN=${twilioAuth}\n`;
-  envContent += `TWILIO_PHONE_NUMBER=${twilioNumber}\n`;
-  envContent += `USER_PHONE_NUMBER=${userPhone}\n`;
-  envContent += `ELEVENLABS_API_KEY=${elevenKey}\n`;
-  envContent += `ELEVENLABS_VOICE_ID=${elevenVoiceId}\n`;
-  envContent += `ELEVENLABS_MODEL_ID=${elevenModel}\n`;
-  envContent += `NGROK_AUTH_TOKEN=${ngrokToken}\n`;
-}
-
-const envPath = path.join(process.cwd(), '.env');
-fs.writeFileSync(envPath, envContent);
-
-console.log('\n✅ Configuration saved to .env!');
-console.log('You can now run "npm install" and then "npm start", or just "docker-compose up".');
-
-rl.close();
 
 main().catch(console.error);
