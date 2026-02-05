@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+// Try to load dotenv if available, otherwise ignore
+try { require('dotenv').config(); } catch (e) { }
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -22,36 +24,36 @@ async function main() {
   console.log('It will be able to execute ANY code, modify files, and control this server.');
   console.log('Use with extreme caution. Do not run this on a shared production server.');
 
-  const proceed = await question('Type "I AGREE" to proceed with root access setup:', '');
-  if (proceed !== 'I AGREE') {
-    console.log('❌ Setup aborted for safety.');
+  const proceed = await question('Values in brackets [] are current/default. Press Enter to keep them.\nType "y" or "yes" to proceed with setup:', 'y');
+  if (!['y', 'yes'].includes(proceed.toLowerCase())) {
+    console.log('❌ Setup aborted.');
     process.exit(1);
   }
 
   console.log('\nThis script will generate your .env file.\n');
 
-  const botToken = await question('Enter your Telegram Bot Token');
+  const botToken = await question('Enter your Telegram Bot Token', process.env.TELEGRAM_BOT_TOKEN);
   if (!botToken) { console.error('❌ Token is required!'); process.exit(1); }
 
-  const provider = await question('LLM Provider (OpenAI/OpenRouter/Anthropic)', 'OpenAI');
+  const provider = await question('LLM Provider (OpenAI/OpenRouter/Anthropic)', process.env.LLM_PROVIDER || 'OpenAI');
 
-  const apiKey = await question('Enter your API Key');
+  const apiKey = await question('Enter your API Key', process.env.OPENAI_API_KEY);
   if (!apiKey) { console.error('❌ API Key is required!'); process.exit(1); }
 
   let baseUrl = undefined;
   if (provider.toLowerCase() === 'openrouter') {
-    baseUrl = await question('Base URL', 'https://openrouter.ai/api/v1');
+    baseUrl = await question('Base URL', process.env.OPENAI_BASE_URL || 'https://openrouter.ai/api/v1');
   } else {
-    const customUrl = await question('Base URL (Leave empty for default)', '');
+    const customUrl = await question('Base URL (Leave empty for default)', process.env.OPENAI_BASE_URL || '');
     if (customUrl) baseUrl = customUrl;
   }
 
   const defaultModel = provider.toLowerCase() === 'anthropic' ? 'claude-3-opus-20240229' : 'gpt-4o';
-  const llmModel = await question('Enter Model Name', defaultModel);
+  const llmModel = await question('Enter Model Name', process.env.LLM_MODEL || defaultModel);
 
-  const braveKey = await question('Enter Brave Search API Key (Optional)', '');
+  const braveKey = await question('Enter Brave Search API Key (Optional)', process.env.BRAVE_SEARCH_API_KEY || '');
 
-  const twilioSid = await question('Twilio Account SID (Optional - for calls)', '');
+  const twilioSid = await question('Twilio Account SID (Optional - for calls)', process.env.TWILIO_ACCOUNT_SID || '');
   let twilioAuth = '';
   let twilioNumber = '';
   let elevenKey = '';
@@ -61,13 +63,13 @@ async function main() {
   let userPhone = '';
 
   if (twilioSid) {
-    twilioAuth = await question('Twilio Auth Token');
-    twilioNumber = await question('Twilio Phone Number (e.g., +1234567890)');
-    userPhone = await question('Your Phone Number (to receive calls)');
-    elevenKey = await question('ElevenLabs API Key');
-    elevenVoiceId = await question('ElevenLabs Voice ID (Aventurine)');
-    elevenModel = await question('ElevenLabs Model ID', 'eleven_multilingual_v2');
-    ngrokToken = await question('Ngrok Auth Token');
+    twilioAuth = await question('Twilio Auth Token', process.env.TWILIO_AUTH_TOKEN);
+    twilioNumber = await question('Twilio Phone Number (e.g., +1234567890)', process.env.TWILIO_PHONE_NUMBER);
+    userPhone = await question('Your Phone Number (to receive calls)', process.env.USER_PHONE_NUMBER);
+    elevenKey = await question('ElevenLabs API Key', process.env.ELEVENLABS_API_KEY);
+    elevenVoiceId = await question('ElevenLabs Voice ID (Aventurine)', process.env.ELEVENLABS_VOICE_ID);
+    elevenModel = await question('ElevenLabs Model ID', process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2');
+    ngrokToken = await question('Ngrok Auth Token', process.env.NGROK_AUTH_TOKEN);
   }
 
   let envContent = `# AvenGhost Configuration\n`;
