@@ -127,6 +127,9 @@ export class VoiceSystem {
     const fileName = await this.generateSpeech(message);
 
     // 3. Construct Public URL
+    if (!this.publicUrl) {
+      throw new Error('Ngrok tunnel not established. Cannot serve audio.');
+    }
     const audioUrl = `${this.publicUrl}/audio/${fileName}`;
     console.log(`[VoiceSystem] Audio URL prepared: ${audioUrl}`);
 

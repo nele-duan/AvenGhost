@@ -1,5 +1,6 @@
 # Build Stage
-FROM node:20-alpine AS builder
+# Build Stage
+FROM node:20-slim AS builder
 
 WORKDIR /app
 COPY package*.json ./
@@ -8,12 +9,15 @@ COPY . .
 RUN npm run build
 
 # Production Stage
-FROM node:20-alpine
+FROM node:20-slim
 
 WORKDIR /app
 
 # Install simple tools (curl, jq, sudo, docker-cli, tzdata, util-linux, git, openssh-client, bash) for system management
-RUN apk add --no-cache curl jq sudo docker-cli tzdata util-linux git openssh-client bash
+# Install simple tools (curl, jq, sudo, docker-cli, tzdata, util-linux, git, openssh-client, bash) for system management
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  curl jq sudo docker.io tzdata util-linux git openssh-client bash \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 RUN npm install --production
