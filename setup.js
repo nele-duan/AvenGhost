@@ -82,6 +82,7 @@ async function main() {
 
   let envContent = `# AvenGhost Configuration\n`;
   envContent += `TELEGRAM_BOT_TOKEN=${botToken}\n`;
+  envContent += `LLM_PROVIDER=${provider}\n`;
   envContent += `OPENAI_API_KEY=${apiKey}\n`;
   envContent += `LLM_MODEL=${llmModel}\n`;
 
