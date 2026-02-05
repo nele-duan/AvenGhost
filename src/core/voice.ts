@@ -197,7 +197,12 @@ export class VoiceSystem {
       const response = await axios({
         url: audioUrl,
         method: 'GET',
-        responseType: 'stream'
+        responseType: 'stream',
+        // Fix 401: Twilio recordings require Basic Auth by default
+        auth: {
+          username: process.env.TWILIO_ACCOUNT_SID || '',
+          password: process.env.TWILIO_AUTH_TOKEN || ''
+        }
       });
 
       const writer = fs.createWriteStream(tempFile);
