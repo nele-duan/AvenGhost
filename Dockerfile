@@ -16,7 +16,7 @@ WORKDIR /app
 # Install simple tools (curl, jq, sudo, docker-cli, tzdata, util-linux, git, openssh-client, bash) for system management
 # Install simple tools (curl, jq, sudo, docker-cli, tzdata, util-linux, git, openssh-client, bash) for system management
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  curl jq sudo docker.io tzdata util-linux git openssh-client bash \
+  curl jq sudo docker.io tzdata util-linux git openssh-client bash unzip \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
