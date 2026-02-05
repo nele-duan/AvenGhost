@@ -172,7 +172,21 @@ export class VoiceSystem {
   async transcribeAudio(audioUrl: string): Promise<string> {
     console.log(`[VoiceSystem] Transcribing: ${audioUrl}`);
     const OpenAI = require('openai');
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    // Support separate STT provider (e.g. Groq) or fallback to main LLM provider
+    const apiKey = process.env.STT_API_KEY || process.env.OPENAI_API_KEY;
+    const baseURL = process.env.STT_BASE_URL || process.env.OPENAI_BASE_URL;
+
+    if (!apiKey) {
+      console.error('[VoiceSystem] No API Key found for Transcription (STT_API_KEY or OPENAI_API_KEY)');
+      return "";
+    }
+
+    const openai = new OpenAI({
+      apiKey: apiKey,
+      baseURL: baseURL // Respect custom endpoint (OpenRouter/Groq)
+    });
+
     const fs = require('fs-extra');
 
     // 1. Download the MP3/WAV from Twilio
@@ -195,9 +209,11 @@ export class VoiceSystem {
       });
 
       // 2. Send to Whisper
+      // Note: OpenRouter might NOT support this endpoint.
+      // If using OpenRouter for LLM, user should likely use Groq for STT.
       const transcription = await openai.audio.transcriptions.create({
         file: fs.createReadStream(tempFile),
-        model: "whisper-1",
+        model: "whisper-1", // Or 'whisper-large-v3' for Groq
         language: "zh" // Hint Chinese
       });
 
