@@ -169,35 +169,39 @@ export class VoiceSystem {
   /**
    * Register a callback to handle speech input from the user.
    */
-  public registerSpeechHandler(handler: (text: string) => Promise<string>) {
+  public registerSpeechHandler(handler: (text: string, incomingPhoneNumber: string) => Promise<string>) {
     const bodyParser = require('body-parser');
     this.app.use(bodyParser.urlencoded({ extended: true }));
 
     this.app.post('/audio/input', async (req: any, res: any) => {
       console.log('[VoiceSystem] Received Interaction:', req.body);
+
       const userSpeech = req.body.SpeechResult;
+      const incomingPhoneNumber = req.body.From;
 
       if (!userSpeech) {
-        // No speech detected, just hang up or play goodbye
+        // No speech detected, listen again
+        // Or play a short prompt? Let's just listen again.
         res.set('Content-Type', 'text/xml');
-        res.send('<Response><Say language="zh-CN">Listening timed out.</Say></Response>');
+        res.send(`<Response><Gather input="speech" action="${this.publicUrl}/audio/input" timeout="5" language="zh-CN"></Gather></Response>`);
         return;
       }
 
       console.log(`[VoiceSystem] User said: ${userSpeech}`);
 
       // Pass to Agent to get response
-      const agentReply = await handler(userSpeech);
+      const agentReply = await handler(userSpeech, incomingPhoneNumber);
 
       // Generate Audio for reply
       const fileName = await this.generateSpeech(agentReply);
       const audioUrl = `${this.publicUrl}/audio/${fileName}`;
 
       // Return TwiML to play reply AND listen again (Loop)
+      // IMPORTANT: Set language="zh-CN" explicitly
       const twiml = `
         <Response>
           <Play>${audioUrl}</Play>
-          <Gather input="speech" action="${this.publicUrl}/audio/input" timeout="3" language="zh-CN">
+          <Gather input="speech" action="${this.publicUrl}/audio/input" timeout="5" language="zh-CN">
           </Gather>
         </Response>
       `;

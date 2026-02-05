@@ -44,31 +44,58 @@ async function main() {
   });
 
 
+  // Track active user to map phone numbers to IDs
+  // In a real bot, we would database this. For now, we assume active session or ENV.
+  let latestActiveUserId = '';
 
   // 5. Voice System (New)
   const { VoiceSystem } = require('./core/voice');
   const voiceSystem = new VoiceSystem();
 
   // Register Voice Loop
-  voiceSystem.registerSpeechHandler(async (text: string) => {
+  voiceSystem.registerSpeechHandler(async (text: string, incomingPhoneNumber: string) => {
     let replyText = "";
-    const userId = "VOICE_USER"; // Or try to reuse context if possible
+
+    // Determine User ID
+    // 1. Try to match env var
+    // 2. Fallback to latest active user
+    // 3. Fallback to "VOICE_USER"
+    let userId = "VOICE_USER";
+    if (incomingPhoneNumber === process.env.USER_PHONE_NUMBER && latestActiveUserId) {
+      userId = latestActiveUserId;
+    } else if (latestActiveUserId) {
+      userId = latestActiveUserId; // Optimistic match for personal bot
+    }
+
+    console.log(`[Index] Converting Voice Input from ${incomingPhoneNumber} -> UserID: ${userId}`);
 
     // Create a dummy replier that captures the text
     const captureReply = async (text: string) => {
       replyText += text + " ";
     };
 
-    // We reuse processMessage but with a special "SEND_AUDIO" flag if needed
-    // For now, we just invoke it and capture the 'sendReply' output
-    await agent.processMessage(userId, text, captureReply);
+    // Inject Context so Agent knows it's a voice call
+    // Limit tools usage
+    const contextInput = `[SYSTEM: VOICE CALL MODE. Spoken Input: "${text}". DO NOT USE TOOLS. DO NOT OUTPUT CODE BLOCKS. KEEP REPLY SHORT.]`;
 
-    return replyText;
+    // We reuse processMessage
+    await agent.processMessage(userId, contextInput, captureReply);
+
+    // STRIP HTML and Code Blocks for TTS
+    // Remove <pre>...</pre> blocks
+    replyText = replyText.replace(/<pre>[\s\S]*?<\/pre>/gi, '');
+    // Remove other tags
+    replyText = replyText.replace(/<[^>]*>/g, '');
+    // Remove markdown code blocks
+    replyText = replyText.replace(/```[\s\S]*?```/g, '');
+
+    return replyText.trim();
   });
 
   // Handle Sticker
   bot.on('sticker', async (ctx) => {
     const userId = ctx.from.id.toString();
+    latestActiveUserId = userId; // Update active user
     const fileId = ctx.message.sticker.file_id;
     const emoji = ctx.message.sticker.emoji || '❓';
 
@@ -102,6 +129,7 @@ async function main() {
 
   bot.on('text', async (ctx) => {
     const userId = ctx.from.id.toString();
+    latestActiveUserId = userId; // Update active user
     const message = ctx.message.text;
 
     // Show typing status while thinking
