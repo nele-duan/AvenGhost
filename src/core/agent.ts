@@ -63,7 +63,8 @@ export class Agent {
     message: string,
     sendReply: (text: string, mode?: 'Markdown' | 'HTML') => Promise<void>,
     sendReaction?: (emoji: string) => Promise<void>,
-    sendImage?: (url: string, caption?: string) => Promise<void>
+    sendImage?: (url: string, caption?: string) => Promise<void>,
+    sendSticker?: (fileId: string) => Promise<void>
   ): Promise<void> {
     console.log(`[Agent] Processing message from ${userId}: ${message}`);
     const fs = require('fs-extra');
@@ -114,7 +115,20 @@ export class Agent {
     let contextStr = await this.memory.getContext();
 
     // 4. Prompt Construction
+    let stickerInfo = "";
+    try {
+      const stickersPath = path.join(__dirname, '../../data/stickers.json');
+      if (await fs.pathExists(stickersPath)) {
+        const stickers = await fs.readJson(stickersPath);
+        const keys = Object.keys(stickers).join(', ');
+        if (keys.length > 0) {
+          stickerInfo = `\nAVAILABLE STICKERS (Use [STICKER:key]): ${keys}\n`;
+        }
+      }
+    } catch (e) { /* ignore */ }
+
     const systemInstruction = `${dynamicSystemPrompt}
+${stickerInfo}
 
 KNOWN SKILLS / INSTRUCTIONS:
 ${this.skillPrompts}`;
@@ -222,7 +236,31 @@ GIT PROTOCOL (SAFETY FIRST):
       }
       response = response.replace(imageRegex, '').trim();
 
-      // 3. Check for Code Block
+      // 3. Clean Stickers
+      const stickerRegex = /(?:\[\s*)?STICKER\s*:\s*([^\s\]]+)(?:\s*\])?/gi;
+      let matchSticker;
+      while ((matchSticker = stickerRegex.exec(response)) !== null) {
+        const key = matchSticker[1].trim();
+        // Look up file ID from loaded stickers
+        // We need to load stickers somewhere. Let's do it in processMessage for now to allow dynamic updates
+        try {
+          const stickersPath = path.join(__dirname, '../../data/stickers.json');
+          if (await fs.pathExists(stickersPath)) {
+            const stickers = await fs.readJson(stickersPath);
+            const stickerId = stickers[key];
+            if (stickerId && sendSticker) {
+              await sendSticker(stickerId);
+            } else {
+              console.warn(`[Agent] Sticker key '${key}' not found or sendSticker undefined.`);
+            }
+          }
+        } catch (e) {
+          console.error("Error loading/sending sticker:", e);
+        }
+      }
+      response = response.replace(stickerRegex, '').trim();
+
+      // 4. Check for Code Block
       const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/;
       const match = codeBlockRegex.exec(response);
 
@@ -241,11 +279,20 @@ GIT PROTOCOL (SAFETY FIRST):
 
         console.log(`[Agent] Turn ${turnCount}: Executing ${language}...`);
 
-        // [UX] Send the code block using Markdown for better compatibility
-        const codeBlock = "```" + language + "\n" + code + "\n```";
+        // [UX] Send the code block using HTML for better reliability
+        const escapeHtml = (unsafe: string) => {
+          return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+        };
 
-        // Pass 'Markdown' as the second argument to sendReply
-        await sendReply(codeBlock, 'Markdown');
+        const codeBlock = `<pre><code class="language-${language}">${escapeHtml(code)}</code></pre>`;
+
+        // Pass 'HTML' as the second argument to sendReply
+        await sendReply(codeBlock, 'HTML');
 
         await this.memory.addMessage('assistant', `[INTERNAL CODE]: ${code}`);
 

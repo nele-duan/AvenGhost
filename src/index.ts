@@ -44,6 +44,13 @@ async function main() {
   });
 
   // Handle Text
+  bot.on('sticker', (ctx) => {
+    const fileId = ctx.message.sticker.file_id;
+    const emoji = ctx.message.sticker.emoji || '❓';
+    console.log(`[STICKER LOG] Emoji: ${emoji} | File ID: ${fileId}`);
+    // Output to console only, keeping chat clean as requested
+  });
+
   bot.on('text', async (ctx) => {
     const userId = ctx.from.id.toString();
     const message = ctx.message.text;
@@ -71,6 +78,15 @@ async function main() {
         }
       };
 
+      const stickerCallback = async (fileId: string) => {
+        try {
+          await ctx.replyWithSticker(fileId);
+        } catch (e) {
+          console.error(`Error sending sticker ${fileId}:`, e);
+          // Silent fail or text fallback
+        }
+      };
+
       const sendReply = async (replyText: string, mode: 'Markdown' | 'HTML' = 'Markdown') => {
         if (replyText && replyText.trim() !== "") {
           try {
@@ -82,7 +98,7 @@ async function main() {
         }
       };
 
-      await agent.processMessage(userId, message, sendReply, reactCallback, imageCallback);
+      await agent.processMessage(userId, message, sendReply, reactCallback, imageCallback, stickerCallback);
     } catch (e) {
       console.error('Error processing message:', e);
       await ctx.reply('... (Static noise) ... System error ...');
