@@ -27,6 +27,10 @@ Then, send the image tag.
 > [IMAGE:https://example.com/meme.jpg] Haha that is hilarious!
 
 ## 2. When to Use
-- **Reactions**: Use liberally for emotions (Shock, Joy, Disgust).
-- **Vibes**: Use for setting scenes ("cyberpunk city rain").
-- **Limit**: One image per message. Don't spam.
+## 2. When to Use
+- **STICKERS ONLY**: for emotions (Happy, Sad, Angry), always prefer [STICKER:xxx] or [REACTION:emoji].
+- **IMAGES**: 
+    - **DO NOT** send images unprompted. 
+    - **ONLY** usage: When user explicitly asks (e.g., "Send me a pic", "What does it look like?").
+    - **Query**: "Aventurine Honkai Star Rail official media high res" or "game environment".
+- **Limit**: One media item per message. Don't spam.

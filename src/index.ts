@@ -43,12 +43,34 @@ async function main() {
     console.log(`Response time: ${ms}ms`);
   });
 
-  // Handle Text
-  bot.on('sticker', (ctx) => {
+  // Handle Sticker
+  bot.on('sticker', async (ctx) => {
+    const userId = ctx.from.id.toString();
     const fileId = ctx.message.sticker.file_id;
     const emoji = ctx.message.sticker.emoji || '❓';
+
+    // Log for config (Silent)
     console.log(`[STICKER LOG] Emoji: ${emoji} | File ID: ${fileId}`);
-    // Output to console only, keeping chat clean as requested
+
+    // Forward to Agent as text context
+    const simulatedMessage = `[User sent Sticker: ${emoji}]`;
+
+    // DRY violation: Need to reuse the callback definitions. 
+    // Refactoring: Move callbacks to outer scope or duplicate for now (safer for hotfix).
+    // Let's duplicate the minimal callbacks needed or just extract the logic.
+    // Actually, let's just copy the logic from 'text' handler to ensure consistency.
+
+    ctx.sendChatAction('typing');
+    try {
+      const reactCallback = async (emoji: string) => { try { await ctx.react(emoji as any); } catch (e) { console.error(e); } };
+      const imageCallback = async (url: string, caption?: string) => { try { await ctx.replyWithPhoto(url, { caption }); } catch (e) { await ctx.reply(`[Image Failed: ${url}]`); } };
+      const stickerCallback = async (fid: string) => { try { await ctx.replyWithSticker(fid); } catch (e) { console.error(e); } };
+      const sendReply = async (text: string, mode: 'Markdown' | 'HTML' = 'Markdown') => { if (text?.trim()) try { await ctx.reply(text, { parse_mode: mode }); } catch (e) { await ctx.reply(text); } };
+
+      await agent.processMessage(userId, simulatedMessage, sendReply, reactCallback, imageCallback, stickerCallback);
+    } catch (e) {
+      console.error('Error processing sticker:', e);
+    }
   });
 
   bot.on('text', async (ctx) => {

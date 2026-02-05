@@ -178,10 +178,12 @@ GIT PROTOCOL (SAFETY FIRST):
    LIMIT: MAX 1 reaction per message. DO NOT SPAM.
    Supported Emojis: 👍, 👎, ❤️, 🔥, 🥰, 👏, 😁, 🤔, 🤯, 😱, 🤬, 😢, 🎉, 🤩, 🤮, 💩, 🙏, 🕊️, 🤡, 🥱, 🥴, 😍, 🐳, 🤝, 👨‍💻, 👀, 🌚, ⚡️, 🍌, 🏆, 💔, 🤨, 😐, 🍓, 🍾, 💋, 🖕, 😈, 😴, 😭, 🤓, 👻, 👨‍🏫, 🤝, ✍️, 🥺, 🦜,  Saturn, etc.
    Use this liberally to show emotion! (But only one).
-5. MEDIA STRATEGY (CRITICAL):
-   - **IMAGES** = EMOTION (Memes, Stickers, Vibes).
-     - Query MUST include "meme", "sticker", "funny", or "aesthetic".
-     - Do NOT use images for text/news.
+   6. MEDIA STRATEGY (CRITICAL):
+   - **EMOTIONS**:
+     1. **STICKERS**: STRICTLY USE [STICKER:key] only.
+     2. **IMAGES**: DO NOT use images for emotions. The user dislikes unprompted images.
+   - **SCENERY / LOOKS**:
+     - **ONLY IF REQUESTED** (e.g., "Show me x"): Query "official art" or "game environment".
      - **SEE: src/skills/media.md for instructions.**
      - Usage: [IMAGE:url] (Found via Image Search Script).
    - **LINKS** = INFORMATION (News, Articles, Docs).
@@ -313,6 +315,8 @@ GIT PROTOCOL (SAFETY FIRST):
       } else {
         // --- NO CODE / FINAL REPLY ---
         if (response) {
+          // Clean excessive newlines (max 2 newlines = 1 empty line)
+          response = response.replace(/\n{3,}/g, '\n\n').trim();
           await sendReply(response);
           await this.memory.addMessage('assistant', response);
         }
