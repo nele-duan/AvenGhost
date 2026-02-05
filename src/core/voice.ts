@@ -86,7 +86,7 @@ export class VoiceSystem {
     console.log(`[VoiceSystem] Generating speech for: "${text.substring(0, 20)}..."`);
 
     try {
-      const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
+      const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?optimize_streaming_latency=3`;
       const response = await axios({
         method: 'POST',
         url: url,
