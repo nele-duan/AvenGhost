@@ -152,8 +152,8 @@ export class VoiceSystem {
         twiml: `
           <Response>
             <Play>${audioUrl}</Play>
-            <Gather input="speech" action="${this.publicUrl}/audio/input" timeout="3" language="zh-CN">
-            </Gather>
+            <Record action="${this.publicUrl}/audio/input" maxLength="10" playBeep="false" trim="trim-silence" timeout="2" />
+            <Say language="zh-CN">I did not hear anything. Goodbye.</Say>
           </Response>
         `,
         to: to,
@@ -167,6 +167,53 @@ export class VoiceSystem {
   }
 
   /**
+   * Transcribe audio using OpenAI Whisper
+   */
+  async transcribeAudio(audioUrl: string): Promise<string> {
+    console.log(`[VoiceSystem] Transcribing: ${audioUrl}`);
+    const OpenAI = require('openai');
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const fs = require('fs-extra');
+
+    // 1. Download the MP3/WAV from Twilio
+    // Twilio recordings are usually WAV.
+    const tempFile = path.join(AUDIO_DIR, `input_${Date.now()}.wav`);
+
+    try {
+      const response = await axios({
+        url: audioUrl,
+        method: 'GET',
+        responseType: 'stream'
+      });
+
+      const writer = fs.createWriteStream(tempFile);
+      response.data.pipe(writer);
+
+      await new Promise((resolve, reject) => {
+        writer.on('finish', resolve);
+        writer.on('error', reject);
+      });
+
+      // 2. Send to Whisper
+      const transcription = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(tempFile),
+        model: "whisper-1",
+        language: "zh" // Hint Chinese
+      });
+
+      console.log(`[VoiceSystem] Whisper Result: ${transcription.text}`);
+
+      // Cleanup
+      await fs.remove(tempFile);
+
+      return transcription.text;
+    } catch (e: any) {
+      console.error('[VoiceSystem] Transcription failed:', e);
+      return "";
+    }
+  }
+
+  /**
    * Register a callback to handle speech input from the user.
    */
   public registerSpeechHandler(handler: (text: string, incomingPhoneNumber: string) => Promise<string>) {
@@ -176,18 +223,26 @@ export class VoiceSystem {
     this.app.post('/audio/input', async (req: any, res: any) => {
       console.log('[VoiceSystem] Received Interaction:', req.body);
 
-      const userSpeech = req.body.SpeechResult;
+      const recordingUrl = req.body.RecordingUrl;
       const incomingPhoneNumber = req.body.From;
 
-      if (!userSpeech) {
-        // No speech detected, listen again
-        // Or play a short prompt? Let's just listen again.
-        res.set('Content-Type', 'text/xml');
-        res.send(`<Response><Gather input="speech" action="${this.publicUrl}/audio/input" timeout="5" language="zh-CN"></Gather></Response>`);
+      if (!recordingUrl) {
+        // Fallback if no recording (e.g. hung up)
+        res.send('<Response></Response>');
         return;
       }
 
-      console.log(`[VoiceSystem] User said: ${userSpeech}`);
+      console.log(`[VoiceSystem] Processing recording: ${recordingUrl}`);
+
+      // Transcribe
+      const userSpeech = await this.transcribeAudio(recordingUrl);
+
+      if (!userSpeech || userSpeech.trim().length === 0) {
+        // Silence? Loop back.
+        res.set('Content-Type', 'text/xml');
+        res.send(`<Response><Record action="${this.publicUrl}/audio/input" maxLength="10" playBeep="false" trim="trim-silence" timeout="2" /></Response>`);
+        return;
+      }
 
       // Pass to Agent to get response
       const agentReply = await handler(userSpeech, incomingPhoneNumber);
@@ -196,13 +251,11 @@ export class VoiceSystem {
       const fileName = await this.generateSpeech(agentReply);
       const audioUrl = `${this.publicUrl}/audio/${fileName}`;
 
-      // Return TwiML to play reply AND listen again (Loop)
-      // IMPORTANT: Set language="zh-CN" explicitly
+      // Return TwiML to play reply AND Record again (Loop)
       const twiml = `
         <Response>
           <Play>${audioUrl}</Play>
-          <Gather input="speech" action="${this.publicUrl}/audio/input" timeout="5" language="zh-CN">
-          </Gather>
+          <Record action="${this.publicUrl}/audio/input" maxLength="10" playBeep="false" trim="trim-silence" timeout="2" />
         </Response>
       `;
 
