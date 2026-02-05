@@ -64,7 +64,8 @@ export class Agent {
     sendReply: (text: string, mode?: 'Markdown' | 'HTML') => Promise<void>,
     sendReaction?: (emoji: string) => Promise<void>,
     sendImage?: (url: string, caption?: string) => Promise<void>,
-    sendSticker?: (fileId: string) => Promise<void>
+    sendSticker?: (fileId: string) => Promise<void>,
+    sendCall?: (text: string) => Promise<void>
   ): Promise<void> {
     console.log(`[Agent] Processing message from ${userId}: ${message}`);
     const fs = require('fs-extra');
@@ -195,7 +196,13 @@ GIT PROTOCOL (SAFETY FIRST):
      - Usage: [IMAGE:url] (Found via Image Search Script).
    - **LINKS** = INFORMATION (News, Articles, Docs).
      - Usage: [Title](url)
-     - If discussing news, ALWAYS provide a source link.
+      - Usage: [Title](url)
+      - If discussing news, ALWAYS provide a source link.
+    - **VOICE CALLS**:
+      - **ONLY IF REQUESTED** (e.g. "Call me", "Speak to me").
+      - Usage: [CALL: The text you want to say during the call]
+      - Example: [CALL: Hey partner, just wanted to see how you're failing today. *chuckles*]
+      - NOTE: The call is ONE-WAY for now. You speak, they listen. Keep it short (1-2 sentences).
 6. SILENCE IS GOLDEN: If you are executing a simple task (like checking a file), output the CODE BLOCK immediately. Do NOT write a preamble like "I will check...".
 
    - IF NO PREAMBLE: The user sees only the FINAL result (1 message).
@@ -268,6 +275,18 @@ GIT PROTOCOL (SAFETY FIRST):
         }
       }
       response = response.replace(stickerRegex, '').trim();
+
+      // 4. Check for Calls
+      const callRegex = /(?:\[\s*)?CALL\s*:\s*(.+?)(?:\s*\])/gi;
+      let matchCall;
+      while ((matchCall = callRegex.exec(response)) !== null) {
+        const textToSay = matchCall[1].trim();
+        if (sendCall) {
+          console.log(`[Agent] Triggering call with message: ${textToSay}`);
+          await sendCall(textToSay);
+        }
+      }
+      response = response.replace(callRegex, '').trim();
 
       // 4. Check for Code Block
       const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/;

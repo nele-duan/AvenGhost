@@ -51,6 +51,25 @@ async function main() {
 
   const braveKey = await question('Enter Brave Search API Key (Optional)', '');
 
+  const twilioSid = await question('Twilio Account SID (Optional - for calls)', '');
+  let twilioAuth = '';
+  let twilioNumber = '';
+  let elevenKey = '';
+  let elevenVoiceId = '';
+  let elevenModel = '';
+  let ngrokToken = '';
+  let userPhone = '';
+
+  if (twilioSid) {
+    twilioAuth = await question('Twilio Auth Token');
+    twilioNumber = await question('Twilio Phone Number (e.g., +1234567890)');
+    userPhone = await question('Your Phone Number (to receive calls)');
+    elevenKey = await question('ElevenLabs API Key');
+    elevenVoiceId = await question('ElevenLabs Voice ID (Aventurine)');
+    elevenModel = await question('ElevenLabs Model ID', 'eleven_multilingual_v2');
+    ngrokToken = await question('Ngrok Auth Token');
+  }
+
   let envContent = `# AvenGhost Configuration\n`;
   envContent += `TELEGRAM_BOT_TOKEN=${botToken}\n`;
   envContent += `OPENAI_API_KEY=${apiKey}\n`;
@@ -60,17 +79,26 @@ async function main() {
     envContent += `OPENAI_BASE_URL=${baseUrl}\n`;
   }
 
-  if (braveKey) {
-    envContent += `BRAVE_SEARCH_API_KEY=${braveKey}\n`;
-  }
-
-  const envPath = path.join(process.cwd(), '.env');
-  fs.writeFileSync(envPath, envContent);
-
-  console.log('\n✅ Configuration saved to .env!');
-  console.log('You can now run "npm install" and then "npm start", or just "docker-compose up".');
-
-  rl.close();
+  envContent += `BRAVE_SEARCH_API_KEY=${braveKey}\n`;
 }
+
+if (twilioSid) {
+  envContent += `TWILIO_ACCOUNT_SID=${twilioSid}\n`;
+  envContent += `TWILIO_AUTH_TOKEN=${twilioAuth}\n`;
+  envContent += `TWILIO_PHONE_NUMBER=${twilioNumber}\n`;
+  envContent += `USER_PHONE_NUMBER=${userPhone}\n`;
+  envContent += `ELEVENLABS_API_KEY=${elevenKey}\n`;
+  envContent += `ELEVENLABS_VOICE_ID=${elevenVoiceId}\n`;
+  envContent += `ELEVENLABS_MODEL_ID=${elevenModel}\n`;
+  envContent += `NGROK_AUTH_TOKEN=${ngrokToken}\n`;
+}
+
+const envPath = path.join(process.cwd(), '.env');
+fs.writeFileSync(envPath, envContent);
+
+console.log('\n✅ Configuration saved to .env!');
+console.log('You can now run "npm install" and then "npm start", or just "docker-compose up".');
+
+rl.close();
 
 main().catch(console.error);

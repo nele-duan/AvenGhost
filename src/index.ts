@@ -43,6 +43,12 @@ async function main() {
     console.log(`Response time: ${ms}ms`);
   });
 
+
+
+  // 5. Voice System (New)
+  const { VoiceSystem } = require('./core/voice');
+  const voiceSystem = new VoiceSystem();
+
   // Handle Sticker
   bot.on('sticker', async (ctx) => {
     const userId = ctx.from.id.toString();
@@ -55,19 +61,23 @@ async function main() {
     // Forward to Agent as text context
     const simulatedMessage = `[User sent Sticker: ${emoji}]`;
 
-    // DRY violation: Need to reuse the callback definitions. 
-    // Refactoring: Move callbacks to outer scope or duplicate for now (safer for hotfix).
-    // Let's duplicate the minimal callbacks needed or just extract the logic.
-    // Actually, let's just copy the logic from 'text' handler to ensure consistency.
-
     ctx.sendChatAction('typing');
     try {
       const reactCallback = async (emoji: string) => { try { await ctx.react(emoji as any); } catch (e) { console.error(e); } };
       const imageCallback = async (url: string, caption?: string) => { try { await ctx.replyWithPhoto(url, { caption }); } catch (e) { await ctx.reply(`[Image Failed: ${url}]`); } };
       const stickerCallback = async (fid: string) => { try { await ctx.replyWithSticker(fid); } catch (e) { console.error(e); } };
       const sendReply = async (text: string, mode: 'Markdown' | 'HTML' = 'Markdown') => { if (text?.trim()) try { await ctx.reply(text, { parse_mode: mode }); } catch (e) { await ctx.reply(text); } };
+      const callCallback = async (text: string) => {
+        try {
+          await ctx.reply(`(Initiating call... 📞)`);
+          await voiceSystem.makeCall(text);
+        } catch (e: any) {
+          console.error('Call failed', e);
+          await ctx.reply(`[Call Failed: ${e.message}]`);
+        }
+      };
 
-      await agent.processMessage(userId, simulatedMessage, sendReply, reactCallback, imageCallback, stickerCallback);
+      await agent.processMessage(userId, simulatedMessage, sendReply, reactCallback, imageCallback, stickerCallback, callCallback);
     } catch (e) {
       console.error('Error processing sticker:', e);
     }
@@ -94,7 +104,7 @@ async function main() {
       const imageCallback = async (url: string, caption?: string) => {
         try {
           await ctx.replyWithPhoto(url, { caption: caption });
-        } catch (e) {
+        } catch (e: any) {
           console.error(`Error sending image ${url}:`, e);
           await ctx.reply(`[Image Failed: ${url}]`);
         }
@@ -120,8 +130,18 @@ async function main() {
         }
       };
 
-      await agent.processMessage(userId, message, sendReply, reactCallback, imageCallback, stickerCallback);
-    } catch (e) {
+      const callCallback = async (text: string) => {
+        try {
+          await ctx.reply(`(Initiating call... 📞)`);
+          await voiceSystem.makeCall(text);
+        } catch (e: any) {
+          console.error('Call failed', e);
+          await ctx.reply(`[Call Failed: ${e.message}]`);
+        }
+      };
+
+      await agent.processMessage(userId, message, sendReply, reactCallback, imageCallback, stickerCallback, callCallback);
+    } catch (e: any) {
       console.error('Error processing message:', e);
       await ctx.reply('... (Static noise) ... System error ...');
     }
