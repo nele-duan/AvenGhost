@@ -270,10 +270,15 @@ export class VoiceSystem {
         }
 
         // Pass to Agent to get response
+        const agentStart = Date.now();
         const agentReply = await handler(userSpeech, incomingPhoneNumber);
+        console.log(`[VoiceSystem] Agent Response Time: ${Date.now() - agentStart}ms`);
 
         // Generate Audio for reply
+        const ttsStart = Date.now();
         const fileName = await this.generateSpeech(agentReply);
+        console.log(`[VoiceSystem] TTS Generation Time: ${Date.now() - ttsStart}ms`);
+
         const audioUrl = `${this.publicUrl}/audio/${fileName}`;
 
         // Return TwiML to play reply AND Record again (Loop)

@@ -115,16 +115,18 @@ export class Agent {
 
     // 4. Prompt Construction
     let stickerInfo = "";
-    try {
-      const stickersPath = path.join(__dirname, '../../data/stickers.json');
-      if (await fs.pathExists(stickersPath)) {
-        const stickers = await fs.readJson(stickersPath);
-        const keys = Object.keys(stickers).join(', ');
-        if (keys.length > 0) {
-          stickerInfo = `\nAVAILABLE STICKERS (Use [STICKER:key]): ${keys}\n`;
+    if (sendSticker) {
+      try {
+        const stickersPath = path.join(__dirname, '../../data/stickers.json');
+        if (await fs.pathExists(stickersPath)) {
+          const stickers = await fs.readJson(stickersPath);
+          const keys = Object.keys(stickers).join(', ');
+          if (keys.length > 0) {
+            stickerInfo = `\nAVAILABLE STICKERS (Use [STICKER:key]): ${keys}\n`;
+          }
         }
-      }
-    } catch (e) { /* ignore */ }
+      } catch (e) { /* ignore */ }
+    }
 
     const systemInstruction = `${dynamicSystemPrompt}
 ${stickerInfo}
@@ -270,22 +272,26 @@ GIT PROTOCOL (SAFETY FIRST):
       let matchSticker;
       while ((matchSticker = stickerRegex.exec(response)) !== null) {
         const key = matchSticker[1].trim();
-        // Look up file ID from loaded stickers
-        // We need to load stickers somewhere. Let's do it in processMessage for now to allow dynamic updates
-        try {
-          const stickersPath = path.join(__dirname, '../../data/stickers.json');
-          if (await fs.pathExists(stickersPath)) {
-            const stickers = await fs.readJson(stickersPath);
-            const stickerId = stickers[key];
-            if (stickerId && sendSticker) {
-              await sendSticker(stickerId);
-            } else {
-              console.warn(`[Agent] Sticker key '${key}' not found or sendSticker undefined.`);
+
+        // Only attempt to send if capability exists
+        if (sendSticker) {
+          try {
+            // Load stickers only if needed and we have the capability
+            const stickersPath = path.join(__dirname, '../../data/stickers.json');
+            if (await fs.pathExists(stickersPath)) {
+              const stickers = await fs.readJson(stickersPath);
+              const stickerId = stickers[key];
+              if (stickerId) {
+                await sendSticker(stickerId);
+              } else {
+                console.warn(`[Agent] Sticker key '${key}' not found.`);
+              }
             }
+          } catch (e) {
+            console.error("Error loading/sending sticker:", e);
           }
-        } catch (e) {
-          console.error("Error loading/sending sticker:", e);
         }
+        // If sendSticker is undefined (Voice Mode), we just strip the tag silently.
       }
       response = response.replace(stickerRegex, '').trim();
 
