@@ -79,7 +79,8 @@ async function main() {
     const contextInput = `[SYSTEM: VOICE CALL MODE. Spoken Input: "${text}". DO NOT USE TOOLS. DO NOT OUTPUT CODE BLOCKS. KEEP REPLY SHORT.]`;
 
     // We reuse processMessage
-    await agent.processMessage(userId, contextInput, captureReply);
+    // ARG 8: disableTools = true (Safety Fix)
+    await agent.processMessage(userId, contextInput, captureReply, undefined, undefined, undefined, undefined, true);
 
     // STRIP HTML and Code Blocks for TTS
     // Remove <pre>...</pre> blocks
