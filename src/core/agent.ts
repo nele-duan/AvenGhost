@@ -63,7 +63,8 @@ export class Agent {
     message: string,
     sendReply: (text: string, mode?: 'Markdown' | 'HTML') => Promise<void>,
     sendReaction?: (emoji: string) => Promise<void>,
-    sendImage?: (url: string, caption?: string) => Promise<void>
+    sendImage?: (url: string, caption?: string) => Promise<void>,
+    sendSticker?: (fileId: string) => Promise<void>
   ): Promise<void> {
     console.log(`[Agent] Processing message from ${userId}: ${message}`);
     const fs = require('fs-extra');
@@ -114,7 +115,20 @@ export class Agent {
     let contextStr = await this.memory.getContext();
 
     // 4. Prompt Construction
+    let stickerInfo = "";
+    try {
+      const stickersPath = path.join(__dirname, '../../data/stickers.json');
+      if (await fs.pathExists(stickersPath)) {
+        const stickers = await fs.readJson(stickersPath);
+        const keys = Object.keys(stickers).join(', ');
+        if (keys.length > 0) {
+          stickerInfo = `\nAVAILABLE STICKERS (Use [STICKER:key]): ${keys}\n`;
+        }
+      }
+    } catch (e) { /* ignore */ }
+
     const systemInstruction = `${dynamicSystemPrompt}
+${stickerInfo}
 
 KNOWN SKILLS / INSTRUCTIONS:
 ${this.skillPrompts}`;
@@ -162,12 +176,21 @@ GIT PROTOCOL (SAFETY FIRST):
 4. REACTION: You MUST use the hidden tag [REACTION:emoji] to react.
    INVALID: "(I react with a heart)" or "*reacts*"
    LIMIT: MAX 1 reaction per message. DO NOT SPAM.
+   LIMIT: MAX 1 reaction per message. DO NOT SPAM.
    Supported Emojis: 👍, 👎, ❤️, 🔥, 🥰, 👏, 😁, 🤔, 🤯, 😱, 🤬, 😢, 🎉, 🤩, 🤮, 💩, 🙏, 🕊️, 🤡, 🥱, 🥴, 😍, 🐳, 🤝, 👨‍💻, 👀, 🌚, ⚡️, 🍌, 🏆, 💔, 🤨, 😐, 🍓, 🍾, 💋, 🖕, 😈, 😴, 😭, 🤓, 👻, 👨‍🏫, 🤝, ✍️, 🥺, 🦜,  Saturn, etc.
-   Use this liberally to show emotion! (But only one).
-5. MEDIA STRATEGY (CRITICAL):
-   - **IMAGES** = EMOTION (Memes, Stickers, Vibes).
-     - Query MUST include "meme", "sticker", "funny", or "aesthetic".
-     - Do NOT use images for text/news.
+   
+5. EMOJI USAGE IN TEXT:
+   - Use emojis naturally but MODERATELY.
+   - Good: "That Sounds fun! 🎲 Let's do it."
+   - Bad (Too many): "That sounds fun! 🎲✨🔥 Let's do it! 🚀"
+   - Bad (None): "That sounds fun. Let's do it." (Too dry for Aventurine)
+   
+6. MEDIA STRATEGY (CRITICAL):
+   - **EMOTIONS**:
+     1. **STICKERS**: STRICTLY USE [STICKER:key]. **DO NOT SEARCH for "stickers" or "emojis" via script.**
+     2. **IMAGES**: **FORBIDDEN**. Do NOT search for images to show emotion. Use text or stickers only.
+   - **SCENERY / LOOKS**:
+     - **ONLY IF REQUESTED** (e.g., "Show me x"): Query "official art" or "game environment".
      - **SEE: src/skills/media.md for instructions.**
      - Usage: [IMAGE:url] (Found via Image Search Script).
    - **LINKS** = INFORMATION (News, Articles, Docs).
@@ -222,7 +245,31 @@ GIT PROTOCOL (SAFETY FIRST):
       }
       response = response.replace(imageRegex, '').trim();
 
-      // 3. Check for Code Block
+      // 3. Clean Stickers
+      const stickerRegex = /(?:\[\s*)?STICKER\s*:\s*([^\s\]]+)(?:\s*\])?/gi;
+      let matchSticker;
+      while ((matchSticker = stickerRegex.exec(response)) !== null) {
+        const key = matchSticker[1].trim();
+        // Look up file ID from loaded stickers
+        // We need to load stickers somewhere. Let's do it in processMessage for now to allow dynamic updates
+        try {
+          const stickersPath = path.join(__dirname, '../../data/stickers.json');
+          if (await fs.pathExists(stickersPath)) {
+            const stickers = await fs.readJson(stickersPath);
+            const stickerId = stickers[key];
+            if (stickerId && sendSticker) {
+              await sendSticker(stickerId);
+            } else {
+              console.warn(`[Agent] Sticker key '${key}' not found or sendSticker undefined.`);
+            }
+          }
+        } catch (e) {
+          console.error("Error loading/sending sticker:", e);
+        }
+      }
+      response = response.replace(stickerRegex, '').trim();
+
+      // 4. Check for Code Block
       const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/;
       const match = codeBlockRegex.exec(response);
 
@@ -241,11 +288,20 @@ GIT PROTOCOL (SAFETY FIRST):
 
         console.log(`[Agent] Turn ${turnCount}: Executing ${language}...`);
 
-        // [UX] Send the code block using Markdown for better compatibility
-        const codeBlock = "```" + language + "\n" + code + "\n```";
+        // [UX] Send the code block using HTML for better reliability
+        const escapeHtml = (unsafe: string) => {
+          return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+        };
 
-        // Pass 'Markdown' as the second argument to sendReply
-        await sendReply(codeBlock, 'Markdown');
+        const codeBlock = `<pre><code class="language-${language}">${escapeHtml(code)}</code></pre>`;
+
+        // Pass 'HTML' as the second argument to sendReply
+        await sendReply(codeBlock, 'HTML');
 
         await this.memory.addMessage('assistant', `[INTERNAL CODE]: ${code}`);
 
@@ -260,12 +316,19 @@ GIT PROTOCOL (SAFETY FIRST):
         const toolOutput = `\n[SYSTEM: Command Executed.Result Follows:]\n${output}\n`;
 
         // PREPARE FOR NEXT TURN
-        finalPayload += `\n\n[ASSISTANT PREVIOUSLY SAID]: ${thought || "(Silent Action)"} \n[EXECUTED CODE]: ${code} \n${toolOutput} \n\nCRITICAL: 1. Review the result. 2. If done, reply to user. 3. If more steps needed, output next Code Block.`;
+        // To prevent spamming multiple searches in one go, we limit tool usage.
+        if (language === 'bash' && code.includes('image_search')) {
+          finalPayload += `\n\n[SYSTEM]: Image search executed. STOP TOOL USAGE. Reply to user now.`;
+        } else {
+          finalPayload += `\n\n[ASSISTANT PREVIOUSLY SAID]: ${thought || "(Silent Action)"} \n[EXECUTED CODE]: ${code} \n${toolOutput} \n\nCRITICAL: 1. Review the result. 2. If done, reply to user. 3. If more steps needed, output next Code Block.`;
+        }
 
         // Continue loop...
       } else {
         // --- NO CODE / FINAL REPLY ---
         if (response) {
+          // Clean excessive newlines (max 2 newlines = 1 empty line)
+          response = response.replace(/\n{3,}/g, '\n\n').trim();
           await sendReply(response);
           await this.memory.addMessage('assistant', response);
         }
