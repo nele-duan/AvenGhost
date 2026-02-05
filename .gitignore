@@ -8,6 +8,5 @@ data/*
 # Whitelist: Core Config Files to be tracked
 !data/users/template.md
 !data/moltbook.json
-!data/stickers.json
 temp/
 package-lock*
