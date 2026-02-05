@@ -132,10 +132,23 @@ ${stickerInfo}
 KNOWN SKILLS / INSTRUCTIONS:
 ${this.skillPrompts}`;
 
+    let quotaInfo = "";
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const statsPath = path.join(__dirname, '../../data/daily_stats.json');
+      if (await fs.pathExists(statsPath)) {
+        const stats = await fs.readJson(statsPath);
+        if (stats.date === today) {
+          quotaInfo = `DAILY CALL STATS: ${stats.calls}/2 Proactive Calls used today.`;
+        }
+      }
+    } catch (e) { }
+
     let userPayload = `CONTEXT HISTORY:
 ${contextStr}
 
 CURRENT SYSTEM TIME: ${new Date().toLocaleString()} (Timezone: Server Local)
+${quotaInfo}
 
 CURRENT USER MESSAGE:
 ${message}
@@ -281,14 +294,46 @@ GIT PROTOCOL (SAFETY FIRST):
       let matchCall;
       while ((matchCall = callRegex.exec(response)) !== null) {
         const textToSay = matchCall[1].trim();
+
+        // --- RATE LIMIT CHECK ---
+        const today = new Date().toISOString().split('T')[0];
+        const statsPath = path.join(__dirname, '../../data/daily_stats.json');
+        let stats = { date: today, calls: 0 };
+
+        try {
+          if (await fs.pathExists(statsPath)) {
+            const loaded = await fs.readJson(statsPath);
+            if (loaded.date === today) {
+              stats = loaded;
+            }
+          }
+        } catch (e) { }
+
+        // Determine if this is a "Requested" call or "Proactive" call
+        // Heuristic: If user message contains "call me" or "phone", it is requested.
+        const isRequested = /call|phone|speak|talk|打|电|语音/i.test(message);
+        const MAX_DAILY_CALLS = 2;
+
         if (sendCall) {
-          console.log(`[Agent] Triggering call with message: ${textToSay}`);
-          await sendCall(textToSay);
+          if (isRequested || stats.calls < MAX_DAILY_CALLS) {
+            console.log(`[Agent] Triggering call (Requested: ${isRequested}, Daily: ${stats.calls}/${MAX_DAILY_CALLS}). Message: ${textToSay}`);
+            await sendCall(textToSay);
+
+            // Increment quota if proactive
+            if (!isRequested) {
+              stats.calls++;
+              await fs.writeJson(statsPath, stats);
+            }
+          } else {
+            console.log(`[Agent] ABORTING PROACTIVE CALL. Quota exceeded (${stats.calls}/${MAX_DAILY_CALLS}).`);
+            // Optionally notify user via text instead?
+            // For now, just logging. The agent might "think" it called, but we blocked it.
+          }
         }
       }
       response = response.replace(callRegex, '').trim();
 
-      // 4. Check for Code Block
+      // 5. Check for Code Block
       const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/;
       const match = codeBlockRegex.exec(response);
 
