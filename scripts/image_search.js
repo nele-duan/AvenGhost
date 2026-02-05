@@ -19,6 +19,12 @@ if (!query) {
 const negativeKeywords = "-site:amazon.com -site:ebay.com -site:aliexpress.com -product -buy -price -store -shop -costume -wig -plush -keychain -figure -figma -nendoroid";
 const enhancedQuery = `${query} ${negativeKeywords}`;
 
+// SAFETY: Prevent Agent from searching for stickers (which result in merch)
+if (query.toLowerCase().includes('sticker') || query.toLowerCase().includes('emoji')) {
+  console.log("NO_RESULT (Sticker search forbidden. Use [STICKER:key] native tag instead.)");
+  process.exit(0);
+}
+
 axios.get('https://api.search.brave.com/res/v1/images/search', {
   params: {
     q: enhancedQuery,
