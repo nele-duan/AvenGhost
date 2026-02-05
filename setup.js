@@ -35,7 +35,7 @@ async function main() {
   const botToken = await question('Enter your Telegram Bot Token', process.env.TELEGRAM_BOT_TOKEN);
   if (!botToken) { console.error('❌ Token is required!'); process.exit(1); }
 
-  const provider = await question('LLM Provider (OpenAI/OpenRouter/Anthropic)', process.env.LLM_PROVIDER || 'OpenAI');
+  const provider = await question('LLM Provider (OpenAI/OpenRouter/Anthropic)', process.env.LLM_PROVIDER || 'OpenRouter');
 
   const apiKey = await question('Enter your API Key', process.env.OPENAI_API_KEY);
   if (!apiKey) { console.error('❌ API Key is required!'); process.exit(1); }
