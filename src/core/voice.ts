@@ -28,6 +28,14 @@ export class VoiceSystem {
 
     // Initialize Express to serve audio files
     this.app = express();
+
+    // DEBUG: Log all incoming requests
+    this.app.use((req, res, next) => {
+      console.log(`[VoiceSystem] Incoming Request: ${req.method} ${req.url}`);
+      console.log(`[VoiceSystem] User-Agent: ${req.get('User-Agent')}`);
+      next();
+    });
+
     this.app.use('/audio', express.static(AUDIO_DIR));
   }
 
