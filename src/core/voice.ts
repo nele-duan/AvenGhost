@@ -86,7 +86,7 @@ export class VoiceSystem {
     console.log(`[VoiceSystem] Generating speech for: "${text.substring(0, 20)}..."`);
 
     try {
-      const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?optimize_streaming_latency=3`;
+      const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
       const response = await axios({
         method: 'POST',
         url: url,
@@ -258,33 +258,40 @@ export class VoiceSystem {
 
       console.log(`[VoiceSystem] Processing recording: ${recordingUrl}`);
 
-      // Transcribe
-      const userSpeech = await this.transcribeAudio(recordingUrl);
+      try {
+        // Transcribe
+        const userSpeech = await this.transcribeAudio(recordingUrl);
 
-      if (!userSpeech || userSpeech.trim().length === 0) {
-        // Silence? Loop back.
+        if (!userSpeech || userSpeech.trim().length === 0) {
+          // Silence? Loop back.
+          res.set('Content-Type', 'text/xml');
+          res.send(`<Response><Record action="${this.publicUrl}/audio/input" maxLength="10" playBeep="false" trim="trim-silence" timeout="2" /></Response>`);
+          return;
+        }
+
+        // Pass to Agent to get response
+        const agentReply = await handler(userSpeech, incomingPhoneNumber);
+
+        // Generate Audio for reply
+        const fileName = await this.generateSpeech(agentReply);
+        const audioUrl = `${this.publicUrl}/audio/${fileName}`;
+
+        // Return TwiML to play reply AND Record again (Loop)
+        const twiml = `
+            <Response>
+              <Play>${audioUrl}</Play>
+              <Record action="${this.publicUrl}/audio/input" maxLength="10" playBeep="false" trim="trim-silence" timeout="2" />
+            </Response>
+          `;
+
         res.set('Content-Type', 'text/xml');
-        res.send(`<Response><Record action="${this.publicUrl}/audio/input" maxLength="10" playBeep="false" trim="trim-silence" timeout="2" /></Response>`);
-        return;
+        res.send(twiml);
+      } catch (error) {
+        console.error('[VoiceSystem] Error in speech handler:', error);
+        res.set('Content-Type', 'text/xml');
+        // Fallback: Just loop back or say error (Saying error is safer)
+        res.send(`<Response><Say>System error. Goodbye.</Say></Response>`);
       }
-
-      // Pass to Agent to get response
-      const agentReply = await handler(userSpeech, incomingPhoneNumber);
-
-      // Generate Audio for reply
-      const fileName = await this.generateSpeech(agentReply);
-      const audioUrl = `${this.publicUrl}/audio/${fileName}`;
-
-      // Return TwiML to play reply AND Record again (Loop)
-      const twiml = `
-        <Response>
-          <Play>${audioUrl}</Play>
-          <Record action="${this.publicUrl}/audio/input" maxLength="10" playBeep="false" trim="trim-silence" timeout="2" />
-        </Response>
-      `;
-
-      res.set('Content-Type', 'text/xml');
-      res.send(twiml);
     });
   }
 }
