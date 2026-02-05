@@ -30,7 +30,7 @@ export class VoiceSystem {
     this.app = express();
 
     // DEBUG: Log all incoming requests
-    this.app.use((req, res, next) => {
+    this.app.use((req: any, res: any, next: any) => {
       console.log(`[VoiceSystem] Incoming Request: ${req.method} ${req.url}`);
       console.log(`[VoiceSystem] User-Agent: ${req.get('User-Agent')}`);
       next();
