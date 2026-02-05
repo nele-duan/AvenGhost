@@ -34,129 +34,121 @@ export class VoiceSystem {
   /**
    * Start the local server and ngrok tunnel
    */
-import ngrok from '@ngrok/ngrok';
-// ... imports ...
-
-// ... inside class ...
-
-  /**
-   * Start the local server and ngrok tunnel
-   */
   async startServer() {
-  if (!this.server) {
-    this.server = this.app.listen(PORT, () => {
-      console.log(`[VoiceSystem] Audio server listening on port ${PORT}`);
-    });
-  }
-
-  if (!this.publicUrl) {
-    try {
-      const authtoken = process.env.NGROK_AUTH_TOKEN;
-      if (!authtoken) {
-        console.warn('[VoiceSystem] WARNING: No NGROK_AUTH_TOKEN. This will likely fail.');
-      }
-
-      // Use official @ngrok/ngrok listener
-      const listener = await ngrok.forward({
-        addr: PORT,
-        authtoken: authtoken,
-        proto: 'http'
+    if (!this.server) {
+      this.server = this.app.listen(PORT, () => {
+        console.log(`[VoiceSystem] Audio server listening on port ${PORT}`);
       });
-
-      this.publicUrl = listener.url();
-      console.log(`[VoiceSystem] Ngrok tunnel established: ${this.publicUrl}`);
-    } catch (err) {
-      console.error('[VoiceSystem] Failed to connect ngrok:', err);
     }
+
+    if (!this.publicUrl) {
+      try {
+        const authtoken = process.env.NGROK_AUTH_TOKEN;
+        if (!authtoken) {
+          console.warn('[VoiceSystem] WARNING: No NGROK_AUTH_TOKEN. This will likely fail.');
+        }
+
+        // Use official @ngrok/ngrok listener
+        const listener = await ngrok.forward({
+          addr: PORT,
+          authtoken: authtoken,
+          proto: 'http'
+        });
+
+        this.publicUrl = listener.url();
+        console.log(`[VoiceSystem] Ngrok tunnel established: ${this.publicUrl}`);
+      } catch (err) {
+        console.error('[VoiceSystem] Failed to connect ngrok:', err);
+      }
+    }
+    return this.publicUrl;
   }
-  return this.publicUrl;
-}
 
   /**
    * Generate speech from text using ElevenLabs
    */
-  async generateSpeech(text: string): Promise < string > {
-  const apiKey = process.env.ELEVENLABS_API_KEY;
-  const voiceId = process.env.ELEVENLABS_VOICE_ID;
+  async generateSpeech(text: string): Promise<string> {
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    const voiceId = process.env.ELEVENLABS_VOICE_ID;
 
-  if(!apiKey || !voiceId) {
-  throw new Error('Missing ElevenLabs configuration');
-}
+    if (!apiKey || !voiceId) {
+      throw new Error('Missing ElevenLabs configuration');
+    }
 
-console.log(`[VoiceSystem] Generating speech for: "${text.substring(0, 20)}..."`);
+    console.log(`[VoiceSystem] Generating speech for: "${text.substring(0, 20)}..."`);
 
-try {
-  const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
-  const response = await axios({
-    method: 'POST',
-    url: url,
-    data: {
-      text: text,
-      model_id: process.env.ELEVENLABS_MODEL_ID || "eleven_monolingual_v1",
-      voice_settings: {
-        stability: 0.5,
-        similarity_boost: 0.75
-      }
-    },
-    headers: {
-      'Accept': 'audio/mpeg',
-      'xi-api-key': apiKey,
-      'Content-Type': 'application/json',
-    },
-    responseType: 'stream'
-  });
+    try {
+      const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`;
+      const response = await axios({
+        method: 'POST',
+        url: url,
+        data: {
+          text: text,
+          model_id: process.env.ELEVENLABS_MODEL_ID || "eleven_monolingual_v1",
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75
+          }
+        },
+        headers: {
+          'Accept': 'audio/mpeg',
+          'xi-api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        responseType: 'stream'
+      });
 
-  const fileName = `speech_${Date.now()}.mp3`;
-  const filePath = path.join(AUDIO_DIR, fileName);
-  const writer = fs.createWriteStream(filePath);
+      const fileName = `speech_${Date.now()}.mp3`;
+      const filePath = path.join(AUDIO_DIR, fileName);
+      const writer = fs.createWriteStream(filePath);
 
-  response.data.pipe(writer);
+      response.data.pipe(writer);
 
-  return new Promise((resolve, reject) => {
-    writer.on('finish', () => resolve(fileName));
-    writer.on('error', reject);
-  });
-} catch (error) {
-  console.error('[VoiceSystem] TTS Generation failed:', error);
-  throw error;
-}
+      return new Promise((resolve, reject) => {
+        writer.on('finish', () => resolve(fileName));
+        writer.on('error', reject);
+      });
+    } catch (error) {
+      console.error('[VoiceSystem] TTS Generation failed:', error);
+      throw error;
+    }
   }
 
   /**
    * Initiate a phone call to the user
    */
-  async makeCall(message: string): Promise < string > {
-  if(!this.twilioClient) throw new Error('Twilio client not initialized');
+  async makeCall(message: string): Promise<string> {
+    if (!this.twilioClient) throw new Error('Twilio client not initialized');
 
-  const to = process.env.USER_PHONE_NUMBER;
-  const from = process.env.TWILIO_PHONE_NUMBER;
+    const to = process.env.USER_PHONE_NUMBER;
+    const from = process.env.TWILIO_PHONE_NUMBER;
 
-  if(!to || !from) throw new Error('Missing phone numbers in configuration');
+    if (!to || !from) throw new Error('Missing phone numbers in configuration');
 
-// 1. Ensure server is running
-await this.startServer();
+    // 1. Ensure server is running
+    await this.startServer();
 
-// 2. Generate Audio
-const fileName = await this.generateSpeech(message);
+    // 2. Generate Audio
+    const fileName = await this.generateSpeech(message);
 
-// 3. Construct Public URL
-if (!this.publicUrl) {
-  throw new Error('Ngrok tunnel not established. Cannot serve audio.');
-}
-const audioUrl = `${this.publicUrl}/audio/${fileName}`;
-console.log(`[VoiceSystem] Audio URL prepared: ${audioUrl}`);
+    // 3. Construct Public URL
+    if (!this.publicUrl) {
+      throw new Error('Ngrok tunnel not established. Cannot serve audio.');
+    }
+    const audioUrl = `${this.publicUrl}/audio/${fileName}`;
+    console.log(`[VoiceSystem] Audio URL prepared: ${audioUrl}`);
 
-// 4. Make the call
-try {
-  const call = await this.twilioClient.calls.create({
-    twiml: `<Response><Play>${audioUrl}</Play></Response>`,
-    to: to,
-    from: from
-  });
-  return call.sid;
-} catch (error) {
-  console.error('[VoiceSystem] Twilio call failed:', error);
-  throw error;
-}
+    // 4. Make the call
+    try {
+      const call = await this.twilioClient.calls.create({
+        twiml: `<Response><Play>${audioUrl}</Play></Response>`,
+        to: to,
+        from: from
+      });
+      return call.sid;
+    } catch (error) {
+      console.error('[VoiceSystem] Twilio call failed:', error);
+      throw error;
+    }
   }
 }
