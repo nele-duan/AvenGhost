@@ -49,6 +49,23 @@ async function main() {
   const { VoiceSystem } = require('./core/voice');
   const voiceSystem = new VoiceSystem();
 
+  // Register Voice Loop
+  voiceSystem.registerSpeechHandler(async (text: string) => {
+    let replyText = "";
+    const userId = "VOICE_USER"; // Or try to reuse context if possible
+
+    // Create a dummy replier that captures the text
+    const captureReply = async (text: string) => {
+      replyText += text + " ";
+    };
+
+    // We reuse processMessage but with a special "SEND_AUDIO" flag if needed
+    // For now, we just invoke it and capture the 'sendReply' output
+    await agent.processMessage(userId, text, captureReply);
+
+    return replyText;
+  });
+
   // Handle Sticker
   bot.on('sticker', async (ctx) => {
     const userId = ctx.from.id.toString();

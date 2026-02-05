@@ -149,7 +149,13 @@ export class VoiceSystem {
     // 4. Make the call
     try {
       const call = await this.twilioClient.calls.create({
-        twiml: `<Response><Play>${audioUrl}</Play></Response>`,
+        twiml: `
+          <Response>
+            <Play>${audioUrl}</Play>
+            <Gather input="speech" action="${this.publicUrl}/audio/input" timeout="3" language="zh-CN">
+            </Gather>
+          </Response>
+        `,
         to: to,
         from: from
       });
@@ -158,5 +164,46 @@ export class VoiceSystem {
       console.error('[VoiceSystem] Twilio call failed:', error);
       throw error;
     }
+  }
+
+  /**
+   * Register a callback to handle speech input from the user.
+   */
+  public registerSpeechHandler(handler: (text: string) => Promise<string>) {
+    const bodyParser = require('body-parser');
+    this.app.use(bodyParser.urlencoded({ extended: true }));
+
+    this.app.post('/audio/input', async (req: any, res: any) => {
+      console.log('[VoiceSystem] Received Interaction:', req.body);
+      const userSpeech = req.body.SpeechResult;
+
+      if (!userSpeech) {
+        // No speech detected, just hang up or play goodbye
+        res.set('Content-Type', 'text/xml');
+        res.send('<Response><Say language="zh-CN">Listening timed out.</Say></Response>');
+        return;
+      }
+
+      console.log(`[VoiceSystem] User said: ${userSpeech}`);
+
+      // Pass to Agent to get response
+      const agentReply = await handler(userSpeech);
+
+      // Generate Audio for reply
+      const fileName = await this.generateSpeech(agentReply);
+      const audioUrl = `${this.publicUrl}/audio/${fileName}`;
+
+      // Return TwiML to play reply AND listen again (Loop)
+      const twiml = `
+        <Response>
+          <Play>${audioUrl}</Play>
+          <Gather input="speech" action="${this.publicUrl}/audio/input" timeout="3" language="zh-CN">
+          </Gather>
+        </Response>
+      `;
+
+      res.set('Content-Type', 'text/xml');
+      res.send(twiml);
+    });
   }
 }
