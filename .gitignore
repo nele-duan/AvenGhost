@@ -10,3 +10,4 @@ data/*
 !data/moltbook.json
 !data/stickers.json
 temp/
+package-lock.json
