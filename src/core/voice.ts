@@ -14,7 +14,7 @@ fs.mkdirSync(AUDIO_DIR, { recursive: true });
 
 export class VoiceSystem {
   private twilioClient: Twilio | null = null;
-  private app: express.Express;
+  private app: express.Application;
   private server: any;
   private publicUrl: string | null = null;
 
