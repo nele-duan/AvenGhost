@@ -188,7 +188,7 @@ GIT PROTOCOL (SAFETY FIRST):
 6. MEDIA STRATEGY (CRITICAL):
    - **EMOTIONS**:
      1. **STICKERS**: STRICTLY USE [STICKER:key]. **DO NOT SEARCH for "stickers" or "emojis" via script.**
-     2. **IMAGES**: DO NOT use images for emotions. The user dislikes unprompted images.
+     2. **IMAGES**: **FORBIDDEN**. Do NOT search for images to show emotion. Use text or stickers only.
    - **SCENERY / LOOKS**:
      - **ONLY IF REQUESTED** (e.g., "Show me x"): Query "official art" or "game environment".
      - **SEE: src/skills/media.md for instructions.**
@@ -316,7 +316,12 @@ GIT PROTOCOL (SAFETY FIRST):
         const toolOutput = `\n[SYSTEM: Command Executed.Result Follows:]\n${output}\n`;
 
         // PREPARE FOR NEXT TURN
-        finalPayload += `\n\n[ASSISTANT PREVIOUSLY SAID]: ${thought || "(Silent Action)"} \n[EXECUTED CODE]: ${code} \n${toolOutput} \n\nCRITICAL: 1. Review the result. 2. If done, reply to user. 3. If more steps needed, output next Code Block.`;
+        // To prevent spamming multiple searches in one go, we limit tool usage.
+        if (language === 'bash' && code.includes('image_search')) {
+          finalPayload += `\n\n[SYSTEM]: Image search executed. STOP TOOL USAGE. Reply to user now.`;
+        } else {
+          finalPayload += `\n\n[ASSISTANT PREVIOUSLY SAID]: ${thought || "(Silent Action)"} \n[EXECUTED CODE]: ${code} \n${toolOutput} \n\nCRITICAL: 1. Review the result. 2. If done, reply to user. 3. If more steps needed, output next Code Block.`;
+        }
 
         // Continue loop...
       } else {
