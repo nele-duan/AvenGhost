@@ -152,7 +152,7 @@ export class VoiceSystem {
         twiml: `
           <Response>
             <Play>${audioUrl}</Play>
-            <Record action="${this.publicUrl}/audio/input" maxLength="10" playBeep="false" trim="trim-silence" timeout="2" />
+            <Record action="${this.publicUrl}/audio/input" maxLength="60" playBeep="false" trim="trim-silence" timeout="2" />
             <Say language="zh-CN">I did not hear anything. Goodbye.</Say>
           </Response>
         `,
@@ -195,7 +195,7 @@ export class VoiceSystem {
 
     try {
       const response = await axios({
-        url: audioUrl,
+        url: audioUrl.endsWith('.wav') ? audioUrl : `${audioUrl}.wav`, // Force .wav for better quality
         method: 'GET',
         responseType: 'stream',
         // Fix 401: Twilio recordings require Basic Auth by default
@@ -213,6 +213,9 @@ export class VoiceSystem {
         writer.on('error', reject);
       });
 
+      const stats = await fs.stat(tempFile);
+      console.log(`[VoiceSystem] Downloaded file size: ${stats.size} bytes`);
+
       // 2. Send to Whisper
       const isGroq = baseURL?.includes('groq.com');
       // Use turbo model for Groq (faster, high accuracy), fallback to whisper-1 for OpenAI
@@ -228,12 +231,32 @@ export class VoiceSystem {
         temperature: 0.0 // Minimize creativity/hallucination
       });
 
-      console.log(`[VoiceSystem] Whisper Result: ${transcription.text}`);
+      let text = transcription.text.trim();
+
+      // Hallucination Filter: Whisper triggers on silence with these phrases
+      const HALLUCINATIONS = [
+        "谢谢大家",
+        "Thank you",
+        "Thanks for watching",
+        "字幕",
+        "请不吝点赞",
+        "观看",
+        "The end"
+      ];
+
+      for (const phrase of HALLUCINATIONS) {
+        if (text.toLowerCase().includes(phrase.toLowerCase())) {
+          console.warn(`[VoiceSystem] Filtered Hallucination: "${text}" matches "${phrase}"`);
+          return "";
+        }
+      }
+
+      console.log(`[VoiceSystem] Whisper Result: ${text}`);
 
       // Cleanup
       await fs.remove(tempFile);
 
-      return transcription.text;
+      return text;
     } catch (e: any) {
       console.error('[VoiceSystem] Transcription failed:', e);
       return "";
@@ -259,7 +282,7 @@ export class VoiceSystem {
         return;
       }
 
-      console.log(`[VoiceSystem] Processing recording: ${recordingUrl}`);
+      console.log(`[VoiceSystem] Processing recording: ${recordingUrl} (Duration: ${req.body.RecordingDuration}s)`);
 
       try {
         // Transcribe
@@ -268,7 +291,7 @@ export class VoiceSystem {
         if (!userSpeech || userSpeech.trim().length === 0) {
           // Silence? Loop back.
           res.set('Content-Type', 'text/xml');
-          res.send(`<Response><Record action="${this.publicUrl}/audio/input" maxLength="10" playBeep="false" trim="trim-silence" timeout="2" /></Response>`);
+          res.send(`<Response><Record action="${this.publicUrl}/audio/input" maxLength="60" playBeep="false" trim="trim-silence" timeout="2" /></Response>`);
           return;
         }
 
@@ -288,7 +311,7 @@ export class VoiceSystem {
         const twiml = `
             <Response>
               <Play>${audioUrl}</Play>
-              <Record action="${this.publicUrl}/audio/input" maxLength="10" playBeep="false" trim="trim-silence" timeout="2" />
+              <Record action="${this.publicUrl}/audio/input" maxLength="60" playBeep="false" trim="trim-silence" timeout="2" />
             </Response>
           `;
 
