@@ -271,88 +271,61 @@ export class RealtimeVoiceSystem {
   }
 
   /**
-   * Stream TTS audio back to Twilio
+   * Stream TTS audio back to Twilio using REST API
    */
   private async streamTTS(session: CallSession, text: string) {
     const apiKey = process.env.ELEVENLABS_API_KEY;
     const voiceId = process.env.ELEVENLABS_VOICE_ID;
+    const axios = require('axios');
 
     if (!apiKey || !voiceId) {
       console.error('[RealtimeVoice] Missing ElevenLabs config');
       return;
     }
 
-    console.log(`[RealtimeVoice] Streaming TTS: "${text.substring(0, 30)}..."`);
+    const modelId = process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2';
+    console.log(`[RealtimeVoice] TTS: "${text.substring(0, 30)}..." (Voice: ${voiceId}, Model: ${modelId})`);
     session.isPlaying = true;
 
-    // Use ElevenLabs WebSocket for streaming TTS
-    // Use the user's configured model, fallback to multilingual_v2 for voice quality
-    const modelId = process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2';
-    const wsUrl = `wss://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream-input?model_id=${modelId}&output_format=ulaw_8000`;
-
-    session.elevenLabsWs = new WebSocket(wsUrl, {
-      headers: { 'xi-api-key': apiKey }
-    });
-
-    session.elevenLabsWs.on('open', () => {
-      console.log('[RealtimeVoice] ElevenLabs connected');
-
-      // Send initial config
-      session.elevenLabsWs!.send(JSON.stringify({
-        text: ' ',
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75
+    try {
+      // Use REST API with streaming response
+      // output_format must be in query string, not body
+      const response = await axios({
+        method: 'POST',
+        url: `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?output_format=ulaw_8000`,
+        data: {
+          text: text,
+          model_id: modelId,
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75
+          }
         },
-        generation_config: {
-          chunk_length_schedule: [50]
-        }
-      }));
+        headers: {
+          'Accept': 'audio/basic',
+          'xi-api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        responseType: 'arraybuffer'
+      });
 
-      // Send text
-      session.elevenLabsWs!.send(JSON.stringify({ text: text }));
+      // Convert to base64 and send to Twilio
+      const audioBase64 = Buffer.from(response.data).toString('base64');
 
-      // End stream
-      session.elevenLabsWs!.send(JSON.stringify({ text: '' }));
-    });
-
-    session.elevenLabsWs.on('message', (data: Buffer) => {
-      try {
-        const response = JSON.parse(data.toString());
-
-        if (response.audio) {
-          // Send audio to Twilio
-          const audioData = response.audio; // Base64 encoded
-          this.sendAudioToTwilio(session, audioData);
-        }
-
-        if (response.isFinal) {
-          console.log('[RealtimeVoice] TTS complete');
-          // Send mark to know when playback ends
-          session.twilioWs.send(JSON.stringify({
-            event: 'mark',
-            streamSid: session.streamSid,
-            mark: { name: 'playback-end' }
-          }));
-        }
-      } catch (e) {
-        // Binary audio data
-        if (Buffer.isBuffer(data)) {
-          const base64Audio = data.toString('base64');
-          this.sendAudioToTwilio(session, base64Audio);
-        }
+      // Send in chunks to Twilio (Twilio expects ~20ms chunks = 160 bytes for 8kHz mulaw)
+      const chunkSize = 160;
+      for (let i = 0; i < audioBase64.length; i += chunkSize) {
+        const chunk = audioBase64.slice(i, i + chunkSize);
+        this.sendAudioToTwilio(session, chunk);
       }
-    });
 
-    session.elevenLabsWs.on('close', () => {
-      console.log('[RealtimeVoice] ElevenLabs disconnected');
+      console.log('[RealtimeVoice] TTS complete');
       session.isPlaying = false;
-    });
 
-    session.elevenLabsWs.on('error', (err: Error) => {
-      console.error('[RealtimeVoice] ElevenLabs error:', err);
+    } catch (e: any) {
+      console.error('[RealtimeVoice] TTS failed:', e.response?.data || e.message);
       session.isPlaying = false;
-    });
+    }
   }
 
   /**
