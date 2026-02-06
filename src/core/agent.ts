@@ -161,10 +161,63 @@ ${this.skillPrompts}`;
       }
     } catch (e) { }
 
+    // Time-of-day awareness for more human-like responses
+    const now = new Date();
+    const hour = now.getHours();
+    const dayOfWeek = now.getDay(); // 0=Sunday, 6=Saturday
+    let timeContext = "";
+    if (hour >= 0 && hour < 5) {
+      timeContext = "TIME_CONTEXT: 深夜 (0-5点). User is up late/very early. You can tease them about not sleeping, show concern, or be sleepy yourself.";
+    } else if (hour >= 5 && hour < 9) {
+      timeContext = "TIME_CONTEXT: 早晨 (5-9点). Morning vibes. Greet appropriately if starting conversation.";
+    } else if (hour >= 9 && hour < 12) {
+      timeContext = "TIME_CONTEXT: 上午 (9-12点). Work/school hours. They might be busy or slacking off.";
+    } else if (hour >= 12 && hour < 14) {
+      timeContext = "TIME_CONTEXT: 午餐时间 (12-14点). Lunch break vibes.";
+    } else if (hour >= 14 && hour < 18) {
+      timeContext = "TIME_CONTEXT: 下午 (14-18点). Afternoon productivity or afternoon slump.";
+    } else if (hour >= 18 && hour < 21) {
+      timeContext = "TIME_CONTEXT: 傍晚 (18-21点). Evening, winding down from work.";
+    } else {
+      timeContext = "TIME_CONTEXT: 夜晚 (21-24点). Night time, relaxed vibes.";
+    }
+
+    // Weekend awareness
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    let dayContext = "";
+    if (isWeekend) {
+      dayContext = "DAY_CONTEXT: 🎉 WEEKEND! User is probably relaxed and free. Good vibes.";
+    } else if (dayOfWeek === 1) {
+      dayContext = "DAY_CONTEXT: Monday... Start of work week. User might be tired or unmotivated.";
+    } else if (dayOfWeek === 5) {
+      dayContext = "DAY_CONTEXT: Friday! Almost weekend! User might be excited.";
+    }
+
+    // Holiday awareness
+    let holidayContext = "";
+    try {
+      const holidaysPath = path.join(__dirname, '../../data/holidays.json');
+      const country = process.env.BOT_COUNTRY || 'JP';
+      if (await fs.pathExists(holidaysPath)) {
+        const allHolidays = await fs.readJson(holidaysPath);
+        const countryData = allHolidays[country];
+        if (countryData && countryData.holidays) {
+          const monthDay = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+          const holiday = countryData.holidays[monthDay];
+          if (holiday) {
+            holidayContext = `HOLIDAY_CONTEXT: 🎊 TODAY IS A HOLIDAY! ${holiday}. Celebrate or acknowledge it naturally!`;
+          }
+        }
+      }
+    } catch (e) { /* ignore */ }
+
     let userPayload = `CONTEXT HISTORY:
 ${contextStr}
 
-CURRENT SYSTEM TIME: ${new Date().toLocaleString()} (Timezone: Server Local)
+CURRENT SYSTEM TIME: ${now.toLocaleString()} (Timezone: ${process.env.TZ || 'Server Local'})
+${timeContext}
+${dayContext}
+${holidayContext}
 ${quotaInfo}
 
 CURRENT USER MESSAGE:
@@ -385,10 +438,9 @@ GIT PROTOCOL (SAFETY FIRST):
             .replace(/'/g, "&#039;");
         };
 
-        const codeBlock = `<pre><code class="language-${language}">${escapeHtml(code)}</code></pre>`;
-
-        // Pass 'HTML' as the second argument to sendReply
-        await sendReply(codeBlock, 'HTML');
+        // [HIDDEN] Don't show code execution to user
+        // const codeBlock = `<pre><code class="language-${language}">${escapeHtml(code)}</code></pre>`;
+        // await sendReply(codeBlock, 'HTML');
 
         await this.memory.addMessage('assistant', `[INTERNAL CODE]: ${code}`);
 
