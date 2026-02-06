@@ -64,7 +64,8 @@ export class Agent {
     sendImage?: (url: string, caption?: string) => Promise<void>,
     sendSticker?: (fileId: string) => Promise<void>,
     sendCall?: (text: string) => Promise<void>,
-    disableTools: boolean = false
+    disableTools: boolean = false,
+    sendVoiceMessage?: (text: string) => Promise<void>
   ): Promise<void> {
     console.log(`[Agent] Processing message from ${userId}: ${message}`);
     const fs = require('fs-extra');
@@ -286,6 +287,11 @@ GIT PROTOCOL (SAFETY FIRST):
       - Usage: [CALL: The text you want to say during the call]
       - Example: [CALL: Hey partner, just wanted to see how you're failing today. *chuckles*]
       - NOTE: The call is ONE-WAY for now. You speak, they listen. Keep it short (1-2 sentences).
+    - **VOICE MESSAGES** 🎤:
+      - Use occasionally to feel more human! Great for: greetings, emotional moments, teasing, singing.
+      - Usage: [VOICE_MSG: The text you want to say as a voice message]
+      - Example: [VOICE_MSG: 早安～今天也要加油哦！]
+      - Keep it SHORT (1-2 sentences max). Long voice messages are annoying.
 6. SILENCE IS GOLDEN: If you are executing a simple task (like checking a file), output the CODE BLOCK immediately. Do NOT write a preamble like "I will check...".
 
    - IF NO PREAMBLE: The user sees only the FINAL result (1 message).
@@ -409,7 +415,19 @@ GIT PROTOCOL (SAFETY FIRST):
       }
       response = response.replace(callRegex, '').trim();
 
-      // 5. Check for Code Block
+      // 5. Check for Voice Messages
+      const voiceMsgRegex = /(?:\[\s*)?VOICE_MSG\s*:\s*(.+?)(?:\s*\])/gi;
+      let matchVoice;
+      while ((matchVoice = voiceMsgRegex.exec(response)) !== null) {
+        const textToSpeak = matchVoice[1].trim();
+        if (sendVoiceMessage && textToSpeak) {
+          console.log(`[Agent] Sending voice message: "${textToSpeak.substring(0, 30)}..."`);
+          await sendVoiceMessage(textToSpeak);
+        }
+      }
+      response = response.replace(voiceMsgRegex, '').trim();
+
+      // 6. Check for Code Block
       const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/;
       const match = codeBlockRegex.exec(response);
 

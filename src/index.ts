@@ -3,6 +3,7 @@ import { Agent } from './core/agent';
 import { LLM } from './core/llm';
 import { MemorySystem } from './core/memory';
 import { HeartbeatSystem } from './core/heartbeat';
+import { VoiceSystem } from './core/voice';
 // Old skills deleted (SystemSkill, FileSkill, SearchSkill)
 // import { SystemSkill } from './skills/system'; 
 import { CHARACTER_PROMPT } from './character'; // Import character
@@ -55,6 +56,9 @@ async function main() {
   // 5. Real-time Voice System (WebSocket-based for low latency)
   const { RealtimeVoiceSystem } = require('./core/realtime-voice');
   const voiceSystem = new RealtimeVoiceSystem();
+
+  // TTS System for voice messages (reuse VoiceSystem's ElevenLabs integration)
+  const ttsSystem = new VoiceSystem();
 
   // Register Voice Loop - now with real-time streaming
   voiceSystem.registerSpeechHandler(async (text: string, incomingPhoneNumber: string) => {
@@ -284,7 +288,29 @@ async function main() {
         }
       };
 
-      await agent.processMessage(userId, message, sendReply, reactCallback, imageCallback, stickerCallback, callCallback);
+      // Voice message callback - sends TTS audio as Telegram voice message
+      const voiceMessageCallback = async (text: string) => {
+        try {
+          await ctx.sendChatAction('record_voice');
+          console.log(`[VoiceMsg] Generating voice for: "${text.substring(0, 30)}..."`);
+
+          // Generate speech using ElevenLabs
+          const fileName = await ttsSystem.generateSpeech(text);
+          const audioPath = path.join(__dirname, '../data/audio', fileName);
+
+          // Send as Telegram voice message
+          await ctx.replyWithVoice({ source: audioPath });
+          lastBotMessageTime = new Date();
+
+          console.log(`[VoiceMsg] Sent voice message: ${fileName}`);
+        } catch (e: any) {
+          console.error('[VoiceMsg] Failed:', e.message);
+          // Fallback to text
+          await ctx.reply(`🎤 ${text}`);
+        }
+      };
+
+      await agent.processMessage(userId, message, sendReply, reactCallback, imageCallback, stickerCallback, callCallback, false, voiceMessageCallback);
     } catch (e: any) {
       console.error('Error processing message:', e);
       await ctx.reply('... (Static noise) ... System error ...');
