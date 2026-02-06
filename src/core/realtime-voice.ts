@@ -151,11 +151,10 @@ export class RealtimeVoiceSystem {
                 // Forward audio to Deepgram
                 this.forwardToDeepgram(session, msg.media.payload);
 
-                // Barge-in detection: if user speaks while AI is playing
-                if (session.isPlaying) {
-                  console.log('[RealtimeVoice] Barge-in detected!');
-                  this.stopPlayback(session);
-                }
+                // NOTE: Barge-in detection disabled for now
+                // The current implementation triggers on ANY audio (including echo/noise)
+                // Proper barge-in requires VAD (Voice Activity Detection) from Deepgram
+                // which we can implement later using the 'speech_final' events
               }
               break;
 
@@ -287,7 +286,9 @@ export class RealtimeVoiceSystem {
     session.isPlaying = true;
 
     // Use ElevenLabs WebSocket for streaming TTS
-    const wsUrl = `wss://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream-input?model_id=eleven_flash_v2_5&output_format=ulaw_8000`;
+    // Use the user's configured model, fallback to multilingual_v2 for voice quality
+    const modelId = process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2';
+    const wsUrl = `wss://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream-input?model_id=${modelId}&output_format=ulaw_8000`;
 
     session.elevenLabsWs = new WebSocket(wsUrl, {
       headers: { 'xi-api-key': apiKey }
