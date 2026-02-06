@@ -42,6 +42,7 @@ interface CallSession {
   isPlaying: boolean;
   pendingText: string;
   twilioWs: WebSocket;
+  initialGreeting?: string;  // Initial greeting to play when stream starts
 }
 
 export class RealtimeVoiceSystem {
@@ -138,12 +139,18 @@ export class RealtimeVoiceSystem {
                 elevenLabsWs: null,
                 isPlaying: false,
                 pendingText: '',
-                twilioWs: ws
+                twilioWs: ws,
+                initialGreeting: msg.start?.customParameters?.greeting
               };
               this.sessions.set(msg.start!.streamSid, session);
 
               // Connect to Deepgram for real-time STT
               await this.connectDeepgram(session);
+
+              // Play initial greeting using ElevenLabs TTS (not Twilio's default voice)
+              if (session.initialGreeting) {
+                await this.streamTTS(session, session.initialGreeting);
+              }
               break;
 
             case 'media':
@@ -202,6 +209,9 @@ export class RealtimeVoiceSystem {
       return;
     }
 
+    // Track accumulated transcript for this utterance
+    let accumulatedTranscript = '';
+
     const url = 'wss://api.deepgram.com/v1/listen?' + new URLSearchParams({
       model: 'nova-2',
       language: 'zh-CN',
@@ -210,8 +220,9 @@ export class RealtimeVoiceSystem {
       channels: '1',
       punctuate: 'true',
       interim_results: 'true',
-      utterance_end_ms: '1000',
-      vad_events: 'true'
+      utterance_end_ms: '1500',  // Increased from 1000 to 1500 for more natural pauses
+      vad_events: 'true',
+      endpointing: '500'  // Minimum silence before considering speech ended
     }).toString();
 
     session.deepgramWs = new WebSocket(url, {
@@ -231,20 +242,27 @@ export class RealtimeVoiceSystem {
           const isFinal = response.is_final;
 
           if (transcript && isFinal) {
-            console.log(`[RealtimeVoice] Final transcript: "${transcript}"`);
-
-            // Process with Agent
-            if (this.speechHandler) {
-              const reply = await this.speechHandler(transcript, '');
-              if (reply) {
-                await this.streamTTS(session, reply);
-              }
-            }
+            // Accumulate final transcripts instead of processing immediately
+            accumulatedTranscript += transcript;
+            console.log(`[RealtimeVoice] Final: "${transcript}" (Accumulated: "${accumulatedTranscript}")`);
           } else if (transcript) {
             console.log(`[RealtimeVoice] Interim: "${transcript}"`);
           }
         } else if (response.type === 'UtteranceEnd') {
-          console.log('[RealtimeVoice] Utterance end detected');
+          // Only process when user has finished speaking
+          console.log(`[RealtimeVoice] Utterance end - Processing: "${accumulatedTranscript}"`);
+
+          if (accumulatedTranscript.trim() && this.speechHandler) {
+            const textToProcess = accumulatedTranscript.trim();
+            accumulatedTranscript = '';  // Reset for next utterance
+
+            const reply = await this.speechHandler(textToProcess, '');
+            if (reply) {
+              await this.streamTTS(session, reply);
+            }
+          } else {
+            accumulatedTranscript = '';  // Reset even if empty
+          }
         }
       } catch (e) {
         console.error('[RealtimeVoice] Deepgram parse error:', e);
@@ -422,11 +440,15 @@ export class RealtimeVoiceSystem {
 
     const wsUrl = this.publicUrl.replace('https://', 'wss://').replace('http://', 'ws://');
 
+    // Pass initial greeting as custom parameter to the stream
+    const greetingText = text || '你好，我是你的AI助手。';
+
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Say language="zh-CN">${text || '你好，我是你的AI助手。'}</Say>
         <Connect>
-          <Stream url="${wsUrl}/media-stream" />
+          <Stream url="${wsUrl}/media-stream">
+            <Parameter name="greeting" value="${greetingText.replace(/"/g, '&quot;')}" />
+          </Stream>
         </Connect>
       </Response>`;
 
