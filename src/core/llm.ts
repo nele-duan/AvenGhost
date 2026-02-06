@@ -40,9 +40,14 @@ export class LLM {
         max_tokens: this.config.maxTokens,
       });
 
+      if (!response || !response.choices || response.choices.length === 0) {
+        console.error('[LLM] Invalid response from provider:', JSON.stringify(response, null, 2));
+        throw new Error('LLM returned an empty or invalid response.');
+      }
+
       return response.choices[0].message.content || '';
-    } catch (error) {
-      console.error('LLM Error:', error);
+    } catch (error: any) {
+      console.error('LLM Error:', error.response?.data || error.message || error);
       throw new Error('Failed to generate response from LLM');
     }
   }
