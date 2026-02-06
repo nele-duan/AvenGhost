@@ -4,7 +4,6 @@ import axios from 'axios';
 import express from 'express';
 import ngrok from '@ngrok/ngrok';
 import { Twilio } from 'twilio';
-import { createClient } from '@deepgram/sdk';
 
 // Constants
 const AUDIO_DIR = path.join(__dirname, '../../data/audio');
@@ -235,35 +234,41 @@ export class VoiceSystem {
 
   /**
    * Deepgram STT - optimized for phone audio (8kHz)
+   * Using REST API directly for reliability
    */
   private async transcribeWithDeepgram(filePath: string, apiKey: string): Promise<string> {
     console.log(`[VoiceSystem] Using Deepgram Nova-2`);
     const fsExtra = require('fs-extra');
 
     try {
-      const deepgram = createClient(apiKey);
       const audioBuffer = await fsExtra.readFile(filePath);
+      console.log(`[VoiceSystem] Sending ${audioBuffer.length} bytes to Deepgram`);
 
-      const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
-        audioBuffer,
-        {
-          model: 'nova-2',
-          language: 'zh',
-          punctuate: true,
-          smart_format: true,
-        }
-      );
+      const response = await axios({
+        method: 'POST',
+        url: 'https://api.deepgram.com/v1/listen?model=nova-2&language=zh-CN&punctuate=true&smart_format=true',
+        headers: {
+          'Authorization': `Token ${apiKey}`,
+          'Content-Type': 'audio/wav'
+        },
+        data: audioBuffer,
+        timeout: 30000
+      });
 
-      if (error) {
-        console.error('[VoiceSystem] Deepgram error:', error);
-        return "";
+      // Debug: Log full response structure
+      const channel = response.data?.results?.channels?.[0];
+      const alt = channel?.alternatives?.[0];
+      console.log(`[VoiceSystem] Deepgram response - confidence: ${alt?.confidence}, words: ${alt?.words?.length || 0}`);
+
+      if (!alt?.transcript) {
+        console.log(`[VoiceSystem] Deepgram returned no transcript. Full response:`, JSON.stringify(response.data?.metadata || {}, null, 2));
       }
 
-      const transcript = result?.results?.channels?.[0]?.alternatives?.[0]?.transcript || "";
+      const transcript = alt?.transcript || "";
       console.log(`[VoiceSystem] Deepgram Result: "${transcript}"`);
       return transcript.trim();
     } catch (e: any) {
-      console.error('[VoiceSystem] Deepgram failed:', e.message);
+      console.error('[VoiceSystem] Deepgram failed:', e.response?.data || e.message);
       return "";
     }
   }
