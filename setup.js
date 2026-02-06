@@ -69,14 +69,13 @@ async function main() {
     '4': { country: 'US', timezone: 'America/Los_Angeles' },
     '5': { country: 'GB', timezone: 'Europe/London' },
     '6': { country: 'KR', timezone: 'Asia/Seoul' },
-    '7': { country: 'TW', timezone: 'Asia/Taipei' },
   };
 
-  const countryChoice = await question('Enter choice (1-8)', process.env.BOT_COUNTRY ?
+  const countryChoice = await question('Enter choice (1-7)', process.env.BOT_COUNTRY ?
     Object.keys(countryMap).find(k => countryMap[k].country === process.env.BOT_COUNTRY) || '1' : '1');
 
   let botCountry, botTimezone;
-  if (countryChoice === '8') {
+  if (countryChoice === '7') {
     botCountry = await question('Country Code (e.g., JP, US, CN)', process.env.BOT_COUNTRY || 'JP');
     botTimezone = await question('Timezone (e.g., Asia/Tokyo)', process.env.TZ || 'Asia/Tokyo');
   } else {
