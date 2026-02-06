@@ -215,6 +215,7 @@ export class VoiceSystem {
 
       // 2. Send to Whisper
       const isGroq = baseURL?.includes('groq.com');
+      // Use turbo model for Groq (faster, high accuracy), fallback to whisper-1 for OpenAI
       const modelName = process.env.STT_MODEL || (isGroq ? 'whisper-large-v3' : 'whisper-1');
 
       console.log(`[VoiceSystem] Using Model: ${modelName} (BaseURL: ${baseURL})`);
@@ -222,7 +223,9 @@ export class VoiceSystem {
       const transcription = await openai.audio.transcriptions.create({
         file: fs.createReadStream(tempFile),
         model: modelName,
-        language: "zh" // Hint Chinese
+        language: "zh", // Hint Chinese
+        prompt: "这是一段中文对话，用户正在和AI助手聊天。请准确识别用户的语音。", // Context for better accuracy
+        temperature: 0.0 // Minimize creativity/hallucination
       });
 
       console.log(`[VoiceSystem] Whisper Result: ${transcription.text}`);
