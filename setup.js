@@ -61,6 +61,7 @@ async function main() {
   let elevenModel = '';
   let sttKey = '';
   let sttBaseUrl = '';
+  let deepgramKey = '';
   let ngrokToken = '';
   let userPhone = '';
 
@@ -73,9 +74,14 @@ async function main() {
     elevenModel = await question('ElevenLabs Model ID', process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2');
 
     console.log('\n--- Voice Recognition (STT) ---');
-    console.log('We recommend using Groq (free/fast) for speech-to-text.');
-    sttKey = await question('STT API Key (Groq/OpenAI)', process.env.STT_API_KEY || process.env.OPENAI_API_KEY);
-    sttBaseUrl = await question('STT Base URL', process.env.STT_BASE_URL || 'https://api.groq.com/openai/v1');
+    console.log('Option A: Deepgram Nova-2 (RECOMMENDED for phone calls, $200 free credit)');
+    console.log('Option B: Groq Whisper (Free, but may hallucinate on low-quality audio)');
+    deepgramKey = await question('Deepgram API Key (Optional but recommended)', process.env.DEEPGRAM_API_KEY || '');
+    if (!deepgramKey) {
+      console.log('No Deepgram key - will use Whisper as fallback.');
+      sttKey = await question('STT API Key (Groq/OpenAI)', process.env.STT_API_KEY || process.env.OPENAI_API_KEY);
+      sttBaseUrl = await question('STT Base URL', process.env.STT_BASE_URL || 'https://api.groq.com/openai/v1');
+    }
 
     ngrokToken = await question('Ngrok Auth Token', process.env.NGROK_AUTH_TOKEN);
   }
@@ -101,6 +107,7 @@ async function main() {
     envContent += `ELEVENLABS_MODEL_ID=${elevenModel}\n`;
     envContent += `STT_API_KEY=${sttKey}\n`;
     envContent += `STT_BASE_URL=${sttBaseUrl}\n`;
+    envContent += `DEEPGRAM_API_KEY=${deepgramKey}\n`;
     envContent += `NGROK_AUTH_TOKEN=${ngrokToken}\n`;
   }
 
