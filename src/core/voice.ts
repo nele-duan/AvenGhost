@@ -396,12 +396,14 @@ export class VoiceSystem {
         const twiml = `
             <Response>
               <Play>${audioUrl}</Play>
-              <Record action="${this.publicUrl}/audio/input" maxLength="60" playBeep="false" trim="trim-silence" timeout="2" />
+              <Record action="${this.publicUrl}/audio/input" maxLength="60" playBeep="false" trim="trim-silence" timeout="3" />
             </Response>
           `;
 
+        console.log(`[VoiceSystem] Sending TwiML response with audio: ${audioUrl}`);
         res.set('Content-Type', 'text/xml');
         res.send(twiml);
+        console.log(`[VoiceSystem] TwiML sent successfully`);
       } catch (error) {
         console.error('[VoiceSystem] Error in speech handler:', error);
         res.set('Content-Type', 'text/xml');
