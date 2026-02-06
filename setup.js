@@ -51,6 +51,39 @@ async function main() {
   const defaultModel = provider.toLowerCase() === 'anthropic' ? 'claude-3-opus-20240229' : 'gpt-4o';
   const llmModel = await question('Enter Model Name', process.env.LLM_MODEL || defaultModel);
 
+  // Country/Timezone configuration
+  console.log('\n--- Localization ---');
+  console.log('Select your country for timezone and holiday calendar:');
+  console.log('  1. 🇯🇵 Japan (Asia/Tokyo)');
+  console.log('  2. 🇨🇳 China (Asia/Shanghai)');
+  console.log('  3. 🇺🇸 USA - East (America/New_York)');
+  console.log('  4. 🇺🇸 USA - West (America/Los_Angeles)');
+  console.log('  5. 🇬🇧 UK (Europe/London)');
+  console.log('  6. 🇰🇷 Korea (Asia/Seoul)');
+  console.log('  7. Custom');
+
+  const countryMap = {
+    '1': { country: 'JP', timezone: 'Asia/Tokyo' },
+    '2': { country: 'CN', timezone: 'Asia/Shanghai' },
+    '3': { country: 'US', timezone: 'America/New_York' },
+    '4': { country: 'US', timezone: 'America/Los_Angeles' },
+    '5': { country: 'GB', timezone: 'Europe/London' },
+    '6': { country: 'KR', timezone: 'Asia/Seoul' },
+  };
+
+  const countryChoice = await question('Enter choice (1-7)', process.env.BOT_COUNTRY ?
+    Object.keys(countryMap).find(k => countryMap[k].country === process.env.BOT_COUNTRY) || '1' : '1');
+
+  let botCountry, botTimezone;
+  if (countryChoice === '7') {
+    botCountry = await question('Country Code (e.g., JP, US, CN)', process.env.BOT_COUNTRY || 'JP');
+    botTimezone = await question('Timezone (e.g., Asia/Tokyo)', process.env.TZ || 'Asia/Tokyo');
+  } else {
+    const selected = countryMap[countryChoice] || countryMap['1'];
+    botCountry = selected.country;
+    botTimezone = selected.timezone;
+  }
+
   const braveKey = await question('Enter Brave Search API Key (Optional)', process.env.BRAVE_SEARCH_API_KEY || '');
 
   const twilioSid = await question('Twilio Account SID (Optional - for calls)', process.env.TWILIO_ACCOUNT_SID || '');
@@ -95,6 +128,11 @@ async function main() {
   if (baseUrl) {
     envContent += `OPENAI_BASE_URL=${baseUrl}\n`;
   }
+
+  // Localization
+  envContent += `\n# Localization\n`;
+  envContent += `BOT_COUNTRY=${botCountry}\n`;
+  envContent += `TZ=${botTimezone}\n`;
 
   envContent += `BRAVE_SEARCH_API_KEY=${braveKey}\n`;
   if (twilioSid) {
