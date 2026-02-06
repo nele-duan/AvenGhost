@@ -218,40 +218,100 @@ export class VoiceSystem {
 
       // 2. Send to Whisper
       const isGroq = baseURL?.includes('groq.com');
-      // Use turbo model for Groq (faster, high accuracy), fallback to whisper-1 for OpenAI
-      const modelName = process.env.STT_MODEL || (isGroq ? 'whisper-large-v3' : 'whisper-1');
+      // whisper-large-v3-turbo: faster + better noise robustness, good for phone audio
+      // Fallback to whisper-1 for OpenAI
+      const modelName = process.env.STT_MODEL || (isGroq ? 'whisper-large-v3-turbo' : 'whisper-1');
 
       console.log(`[VoiceSystem] Using Model: ${modelName} (BaseURL: ${baseURL})`);
+
+      // Early exit: Only skip truly corrupt/empty files.
+      // WAV header alone is ~44 bytes. Even a short "喂" is still several KB.
+      // Only skip if it's basically empty/corrupt (< 1KB).
+      if (stats.size < 1000) {
+        console.warn(`[VoiceSystem] Audio file corrupt/empty (${stats.size} bytes). Skipping.`);
+        await fs.remove(tempFile);
+        return "";
+      }
 
       const transcription = await openai.audio.transcriptions.create({
         file: fs.createReadStream(tempFile),
         model: modelName,
         language: "zh", // Hint Chinese
-        prompt: "这是一段中文对话，用户正在和AI助手聊天。请准确识别用户的语音。", // Context for better accuracy
+        // IMPORTANT: Use vocabulary hints, NOT sentences that could be regurgitated as speech.
+        // Whisper hallucinates prompt text when audio is silent/garbage.
+        prompt: "Aven, 聊天, 对话, 语音助手",
         temperature: 0.0 // Minimize creativity/hallucination
       });
 
       let text = transcription.text.trim();
 
-      // Hallucination Filter: Whisper triggers on silence with these phrases
+      // Hallucination Filter: Whisper has SEVERE hallucination issues with Chinese
+      // on low-quality phone audio (8kHz). These are phrases from its training data.
       const HALLUCINATIONS = [
+        // Most common Chinese hallucinations (YouTube/Bilibili subtitle artifacts)
         "谢谢大家",
+        "谢谢观看",
+        "感谢大家",
+        "感谢观看",
+        "感谢收听",
+        "请订阅",
+        "请点赞",
+        "请不吝点赞",
+        "欢迎订阅",
+        "字幕",
+        "字幕组",
+        "字幕由",
+        "字幕制作",
+        "视频来源",
+        "视频来自",
+        "本视频",
+        "下期再见",
+        "下次再见",
+        "我们下期",
+        "拜拜",
+        "再见",
+        // English hallucinations
         "Thank you",
         "Thanks for watching",
-        "字幕",
-        "请不吝点赞",
-        "观看",
-        "The end"
+        "Thanks for listening",
+        "Please subscribe",
+        "The end",
+        "Goodbye",
+        "See you next time",
+        // Legal/copyright disclaimers
+        "仅供学习",
+        "请于24小时内删除",
+        "48小时内删除",
+        "版权归原作者",
+        "侵权请联系",
+        "For study",
+        "research purpose",
+        // Old prompt fragments
+        "请准确识别用户的语音",
+        "用户正在和AI助手聊天",
+        "这是一段中文对话",
+        // Random nonsense Whisper generates
+        "...",
+        "。。。",
+        "…"
       ];
 
       for (const phrase of HALLUCINATIONS) {
         if (text.toLowerCase().includes(phrase.toLowerCase())) {
           console.warn(`[VoiceSystem] Filtered Hallucination: "${text}" matches "${phrase}"`);
+          await fs.remove(tempFile);
           return "";
         }
       }
 
-      console.log(`[VoiceSystem] Whisper Result: ${text}`);
+      // Suspicious short output: Large file but tiny result
+      // This often indicates Whisper failed to understand and guessed something short
+      if (stats.size > 10000 && text.length < 6) {
+        console.warn(`[VoiceSystem] Suspicious: ${stats.size} bytes audio -> only ${text.length} chars "${text}"`);
+        // Don't filter, just log - user might have said something short
+      }
+
+      console.log(`[VoiceSystem] Whisper Final Result: "${text}" (${text.length} chars from ${stats.size} bytes)`);
 
       // Cleanup
       await fs.remove(tempFile);
