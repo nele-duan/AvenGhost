@@ -125,7 +125,15 @@ async function main() {
 
     ctx.sendChatAction('typing');
     try {
-      const reactCallback = async (emoji: string) => { try { await ctx.react(emoji as any); } catch (e) { console.error(e); } };
+      // Telegram supported reaction emojis whitelist
+      const VALID_REACTIONS = ['👍', '👎', '❤', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🤬', '😢', '🎉', '🤩', '🤮', '💩', '🙏', '🕊', '🤡', '🥱', '🥴', '😍', '🐳', '🤝', '👨‍💻', '👀', '🌚', '⚡', '🍌', '🏆', '💔', '🤨', '😐', '🍓', '🍾', '💋', '🖕', '😈', '😴', '😭', '🤓', '👻', '👨‍🏫', '✍', '🥺', '🦜', '😏', '💅', '❤️', '⚡️', '🕊️'];
+      const reactCallback = async (emoji: string) => {
+        if (!VALID_REACTIONS.includes(emoji)) {
+          console.warn(`[Reaction] Invalid emoji: ${emoji}, skipping`);
+          return;
+        }
+        try { await ctx.react(emoji as any); } catch (e) { console.error(`[Reaction] Failed: ${emoji}`, e); }
+      };
       const imageCallback = async (url: string, caption?: string) => { try { await ctx.replyWithPhoto(url, { caption }); } catch (e) { await ctx.reply(`[Image Failed: ${url}]`); } };
       const stickerCallback = async (fid: string) => { try { await ctx.replyWithSticker(fid); } catch (e) { console.error(e); } };
       const sendReply = async (text: string, mode: 'Markdown' | 'HTML' = 'Markdown') => { if (text?.trim()) try { await ctx.reply(text, { parse_mode: mode }); } catch (e) { await ctx.reply(text); } };
@@ -178,13 +186,17 @@ async function main() {
     ctx.sendChatAction('typing');
 
     try {
-      // Pass a callback function to handle replies and reactions
+      // Telegram supported reaction emojis whitelist
+      const VALID_REACTIONS = ['👍', '👎', '❤', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🤬', '😢', '🎉', '🤩', '🤮', '💩', '🙏', '🕊', '🤡', '🥱', '🥴', '😍', '🐳', '🤝', '👨‍💻', '👀', '🌚', '⚡', '🍌', '🏆', '💔', '🤨', '😐', '🍓', '🍾', '💋', '🖕', '😈', '😴', '😭', '🤓', '👻', '👨‍🏫', '✍', '🥺', '🦜', '😏', '💅', '❤️', '⚡️', '🕊️'];
       const reactCallback = async (emoji: string) => {
+        if (!VALID_REACTIONS.includes(emoji)) {
+          console.warn(`[Reaction] Invalid emoji: ${emoji}, skipping`);
+          return;
+        }
         try {
-          // Assuming telegraf 4.16+:
           await ctx.react(emoji as any);
         } catch (e) {
-          console.error(`Error reacting with ${emoji}:`, e);
+          console.error(`[Reaction] Failed: ${emoji}`, e);
         }
       };
 
