@@ -28,7 +28,7 @@ export class LLM {
     });
   }
 
-  async chat(systemPrompt: string, userMessage: string): Promise<string> {
+  async chat(systemPrompt: string, userMessage: string, options?: { maxTokens?: number }): Promise<string> {
     try {
       const response = await this.client.chat.completions.create({
         model: this.config.model,
@@ -37,7 +37,7 @@ export class LLM {
           { role: 'user', content: userMessage }
         ],
         temperature: this.config.temperature,
-        max_tokens: this.config.maxTokens,
+        max_tokens: options?.maxTokens ?? this.config.maxTokens,
       });
 
       if (!response || !response.choices || response.choices.length === 0) {

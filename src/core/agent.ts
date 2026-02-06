@@ -114,25 +114,40 @@ export class Agent {
     let contextStr = await this.memory.getContext();
 
     // 4. Prompt Construction
-    let stickerInfo = "";
-    if (sendSticker) {
-      try {
-        const stickersPath = path.join(__dirname, '../../data/stickers.json');
-        if (await fs.pathExists(stickersPath)) {
-          const stickers = await fs.readJson(stickersPath);
-          const keys = Object.keys(stickers).join(', ');
-          if (keys.length > 0) {
-            stickerInfo = `\nAVAILABLE STICKERS (Use [STICKER:key]): ${keys}\n`;
-          }
-        }
-      } catch (e) { /* ignore */ }
-    }
+    // VOICE MODE OPTIMIZATION: Skip heavy prompts when disableTools=true
+    let systemInstruction: string;
 
-    const systemInstruction = `${dynamicSystemPrompt}
+    if (disableTools) {
+      // Stripped-down prompt for voice mode - just personality, no tools/skills
+      systemInstruction = `${dynamicSystemPrompt}
+
+VOICE CALL MODE ACTIVE:
+- Keep responses SHORT (1-2 sentences max)
+- Be conversational and natural
+- DO NOT use tools, code blocks, or special tags
+- Respond as if speaking on a phone call`;
+    } else {
+      // Full prompt for chat mode
+      let stickerInfo = "";
+      if (sendSticker) {
+        try {
+          const stickersPath = path.join(__dirname, '../../data/stickers.json');
+          if (await fs.pathExists(stickersPath)) {
+            const stickers = await fs.readJson(stickersPath);
+            const keys = Object.keys(stickers).join(', ');
+            if (keys.length > 0) {
+              stickerInfo = `\nAVAILABLE STICKERS (Use [STICKER:key]): ${keys}\n`;
+            }
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      systemInstruction = `${dynamicSystemPrompt}
 ${stickerInfo}
 
 KNOWN SKILLS / INSTRUCTIONS:
 ${this.skillPrompts}`;
+    }
 
     let quotaInfo = "";
     try {
@@ -242,7 +257,9 @@ GIT PROTOCOL (SAFETY FIRST):
       turnCount++;
 
       // Chat with LLM
-      let response = await this.llm.chat(systemInstruction, finalPayload);
+      // Voice mode: limit tokens for faster response
+      const llmOptions = disableTools ? { maxTokens: 150 } : undefined;
+      let response = await this.llm.chat(systemInstruction, finalPayload, llmOptions);
       response = response ? response.trim() : "";
 
       // 1. Clean Reactions
