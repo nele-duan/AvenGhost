@@ -34,6 +34,13 @@ async function main() {
   const agent = new Agent(llm, memory, SYSTEM_PROMPT);
   await agent.loadSkills(); // Load .mk prompts for Code Capability
 
+  // 3a. Migrate chat history to RAG if needed (first-time setup)
+  try {
+    await memory.migrateHistoryToRAG();
+  } catch (e) {
+    console.error('[Startup] Migration failed:', e);
+  }
+
   // 3. Setup Telegram Bot
   const bot = new Telegraf(BOT_TOKEN, { handlerTimeout: Infinity });
 

@@ -37,6 +37,11 @@ async function main() {
 
   const provider = await question('LLM Provider (OpenAI/OpenRouter/Anthropic)', process.env.LLM_PROVIDER || 'OpenRouter');
 
+  if (provider.toLowerCase() !== 'openrouter') {
+    console.log('\n⚠️  Note: RAG memory system requires OpenRouter for embedding.');
+    console.log('   The system will still work, but long-term memory will be disabled.');
+  }
+
   const apiKey = await question('Enter your API Key', process.env.OPENAI_API_KEY);
   if (!apiKey) { console.error('❌ API Key is required!'); process.exit(1); }
 
