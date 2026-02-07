@@ -114,6 +114,16 @@ export class Agent {
     await this.memory.addMessage('user', message);
     let contextStr = await this.memory.getContext();
 
+    // 4. RAG: Retrieve relevant long-term memories
+    let longTermMemories = '';
+    if (!disableTools) { // Skip RAG in voice mode for speed
+      try {
+        longTermMemories = await this.memory.retrieveRelevantMemories(message);
+      } catch (e) {
+        console.error('[Agent] RAG retrieval failed:', e);
+      }
+    }
+
     // 4. Prompt Construction
     // VOICE MODE OPTIMIZATION: Skip heavy prompts when disableTools=true
     let systemInstruction: string;
@@ -214,6 +224,7 @@ ${this.skillPrompts}`;
 
     let userPayload = `CONTEXT HISTORY:
 ${contextStr}
+${longTermMemories}
 
 CURRENT SYSTEM TIME: ${now.toLocaleString()} (Timezone: ${process.env.TZ || 'Server Local'})
 ${timeContext}
@@ -343,14 +354,15 @@ GIT PROTOCOL (SAFETY FIRST):
       }
       response = response.replace(imageRegex, '').trim();
 
-      // 3. Clean Stickers
+      // 3. Clean Stickers (LIMIT: max 1 sticker per response)
       const stickerRegex = /(?:\[\s*)?STICKER\s*:\s*([^\s\]]+)(?:\s*\])?/gi;
       let matchSticker;
+      let stickerSent = false; // Track if we've already sent a sticker
       while ((matchSticker = stickerRegex.exec(response)) !== null) {
         const key = matchSticker[1].trim();
 
-        // Only attempt to send if capability exists
-        if (sendSticker) {
+        // Only send ONE sticker per response
+        if (sendSticker && !stickerSent) {
           try {
             // Load stickers only if needed and we have the capability
             const stickersPath = path.join(__dirname, '../../data/stickers.json');
@@ -359,6 +371,8 @@ GIT PROTOCOL (SAFETY FIRST):
               const stickerId = stickers[key];
               if (stickerId) {
                 await sendSticker(stickerId);
+                stickerSent = true; // Mark as sent
+                console.log(`[Agent] Sent sticker: ${key}`);
               } else {
                 console.warn(`[Agent] Sticker key '${key}' not found.`);
               }
@@ -366,6 +380,8 @@ GIT PROTOCOL (SAFETY FIRST):
           } catch (e) {
             console.error("Error loading/sending sticker:", e);
           }
+        } else if (stickerSent) {
+          console.log(`[Agent] Skipping extra sticker: ${key} (limit: 1 per response)`);
         }
         // If sendSticker is undefined (Voice Mode), we just strip the tag silently.
       }
@@ -373,6 +389,7 @@ GIT PROTOCOL (SAFETY FIRST):
 
       // 4. Check for Calls
       const callRegex = /(?:\[\s*)?CALL\s*:\s*(.+?)(?:\s*\])/gi;
+      let callMade = false;
       let matchCall;
       while ((matchCall = callRegex.exec(response)) !== null) {
         const textToSay = matchCall[1].trim();
@@ -396,10 +413,14 @@ GIT PROTOCOL (SAFETY FIRST):
         const isRequested = /call|phone|speak|talk|打|电|语音/i.test(message);
         const MAX_DAILY_CALLS = 2;
 
-        if (sendCall) {
+        if (sendCall && !callMade) {
           if (isRequested || stats.calls < MAX_DAILY_CALLS) {
             console.log(`[Agent] Triggering call (Requested: ${isRequested}, Daily: ${stats.calls}/${MAX_DAILY_CALLS}). Message: ${textToSay}`);
             await sendCall(textToSay);
+            callMade = true; // Mark that we made a call
+
+            // Save what the user ACTUALLY heard to memory
+            await this.memory.addMessage('assistant', `[CALL]: ${textToSay}`);
 
             // Increment quota if proactive
             if (!isRequested) {
@@ -415,17 +436,75 @@ GIT PROTOCOL (SAFETY FIRST):
       }
       response = response.replace(callRegex, '').trim();
 
+      // If call was made, only keep links in response (strip other text)
+      if (callMade) {
+        const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+        const links: string[] = [];
+        let linkMatch;
+        while ((linkMatch = linkRegex.exec(response)) !== null) {
+          links.push(`[${linkMatch[1]}](${linkMatch[2]})`);
+        }
+        response = links.join('\n'); // Only keep links
+        console.log(`[Agent] Call mode: stripped text, keeping ${links.length} links`);
+      }
+
       // 5. Check for Voice Messages
+      // When voice message is sent, merge remaining text into it and skip text reply
       const voiceMsgRegex = /(?:\[\s*)?VOICE_MSG\s*:\s*(.+?)(?:\s*\])/gi;
+      let voiceMessageSent = false;
       let matchVoice;
       while ((matchVoice = voiceMsgRegex.exec(response)) !== null) {
-        const textToSpeak = matchVoice[1].trim();
-        if (sendVoiceMessage && textToSpeak) {
-          console.log(`[Agent] Sending voice message: "${textToSpeak.substring(0, 30)}..."`);
+        let textToSpeak = matchVoice[1].trim();
+
+        if (sendVoiceMessage && textToSpeak && !voiceMessageSent) {
+          // Get the remaining text (after removing all tags) to merge into voice
+          let remainingText = response
+            .replace(voiceMsgRegex, '')
+            .replace(/\[STICKER:[^\]]+\]/gi, '')
+            .replace(/\[REACTION:[^\]]+\]/gi, '')
+            .replace(/\[IMAGE:[^\]]+\]/gi, '')
+            .replace(/\[CALL:[^\]]+\]/gi, '')
+            .replace(/```[\s\S]*?```/g, '')
+            .replace(/\n{2,}/g, ' ')
+            .trim();
+
+          // Merge remaining text into voice message
+          if (remainingText && !remainingText.match(/^\[.*\]$/)) {
+            // Only merge if it's actual content, not just links
+            const nonLinkText = remainingText.replace(/\[.*?\]\(.*?\)/g, '').trim();
+            if (nonLinkText) {
+              textToSpeak = `${textToSpeak} ${nonLinkText}`;
+            }
+          }
+
+          // Limit voice message to ~200 chars (~30 seconds of speech)
+          const MAX_VOICE_CHARS = 200;
+          if (textToSpeak.length > MAX_VOICE_CHARS) {
+            textToSpeak = textToSpeak.substring(0, MAX_VOICE_CHARS) + '...';
+            console.log(`[Agent] Voice message truncated to ${MAX_VOICE_CHARS} chars`);
+          }
+
+          console.log(`[Agent] Sending voice message: "${textToSpeak.substring(0, 50)}..."`);
           await sendVoiceMessage(textToSpeak);
+          voiceMessageSent = true;
+
+          // Save what the user ACTUALLY heard to memory
+          await this.memory.addMessage('assistant', `[VOICE]: ${textToSpeak}`);
         }
       }
       response = response.replace(voiceMsgRegex, '').trim();
+
+      // If voice message was sent, only keep links in response (strip other text)
+      if (voiceMessageSent) {
+        const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+        const links: string[] = [];
+        let linkMatch;
+        while ((linkMatch = linkRegex.exec(response)) !== null) {
+          links.push(`[${linkMatch[1]}](${linkMatch[2]})`);
+        }
+        response = links.join('\n'); // Only keep links
+        console.log(`[Agent] Voice mode: stripped text, keeping ${links.length} links`);
+      }
 
       // 6. Check for Code Block
       const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/;
@@ -437,11 +516,19 @@ GIT PROTOCOL (SAFETY FIRST):
         const language = match[1] ? match[1].toLowerCase().trim() : 'bash';
         const code = match[2];
 
-        // Send "Thought" (User sees progress)
+        // Send "Thought" (User sees progress) - but filter out internal markers
         if (thought) {
-          // [VERBOSE MODE REQUESTED]
-          await sendReply(thought);
-          await this.memory.addMessage('assistant', thought);
+          // Filter out any internal markers that shouldn't be shown to user
+          const cleanThought = thought
+            .replace(/\[?INTERNAL CODE\]?:?/gi, '')
+            .replace(/^\s*[\n\r]+/, '') // Remove leading newlines
+            .trim();
+
+          if (cleanThought && !cleanThought.match(/^[\[\(].*[\]\)]$/)) {
+            // Only send if there's actual content (not just brackets/markers)
+            await sendReply(cleanThought);
+            await this.memory.addMessage('assistant', cleanThought);
+          }
         }
 
         console.log(`[Agent] Turn ${turnCount}: Executing ${language}...`);

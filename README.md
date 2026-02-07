@@ -16,6 +16,7 @@
 ### 🧠 Dynamic Memory System
 - **Soul System**: `data/soul.md` stores the AI's self-awareness and personality
 - **Partner Profiles**: `data/users/{id}.md` remembers everything about you
+- **RAG Long-Term Memory**: Auto-summarizes conversations and retrieves relevant memories semantically
 - **Persistent Memory**: Important information survives across conversations
 
 ### 💬 Human-Like Interaction
@@ -45,7 +46,7 @@
 - Ubuntu Server (22.04/24.04 LTS recommended)
 - Docker & Docker Compose
 - Telegram Bot Token
-- LLM API Key (OpenAI / OpenRouter / Anthropic)
+- **OpenRouter API Key** (required for LLM + Embedding)
 
 ### Installation
 
