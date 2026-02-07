@@ -516,11 +516,19 @@ GIT PROTOCOL (SAFETY FIRST):
         const language = match[1] ? match[1].toLowerCase().trim() : 'bash';
         const code = match[2];
 
-        // Send "Thought" (User sees progress)
+        // Send "Thought" (User sees progress) - but filter out internal markers
         if (thought) {
-          // [VERBOSE MODE REQUESTED]
-          await sendReply(thought);
-          await this.memory.addMessage('assistant', thought);
+          // Filter out any internal markers that shouldn't be shown to user
+          const cleanThought = thought
+            .replace(/\[?INTERNAL CODE\]?:?/gi, '')
+            .replace(/^\s*[\n\r]+/, '') // Remove leading newlines
+            .trim();
+
+          if (cleanThought && !cleanThought.match(/^[\[\(].*[\]\)]$/)) {
+            // Only send if there's actual content (not just brackets/markers)
+            await sendReply(cleanThought);
+            await this.memory.addMessage('assistant', cleanThought);
+          }
         }
 
         console.log(`[Agent] Turn ${turnCount}: Executing ${language}...`);
