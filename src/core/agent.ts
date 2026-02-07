@@ -477,12 +477,8 @@ GIT PROTOCOL (SAFETY FIRST):
             }
           }
 
-          // Limit voice message to ~200 chars (~30 seconds of speech)
-          const MAX_VOICE_CHARS = 200;
-          if (textToSpeak.length > MAX_VOICE_CHARS) {
-            textToSpeak = textToSpeak.substring(0, MAX_VOICE_CHARS) + '...';
-            console.log(`[Agent] Voice message truncated to ${MAX_VOICE_CHARS} chars`);
-          }
+          // No longer truncating voice messages - let them play in full
+          console.log(`[Agent] Voice message length: ${textToSpeak.length} chars`);
 
           console.log(`[Agent] Sending voice message: "${textToSpeak.substring(0, 50)}..."`);
           await sendVoiceMessage(textToSpeak);
