@@ -458,13 +458,18 @@ GIT PROTOCOL (SAFETY FIRST):
 
         if (sendVoiceMessage && textToSpeak && !voiceMessageSent) {
           // Get the remaining text (after removing all tags) to merge into voice
+          // CRITICAL: Filter out ALL internal/system markers to prevent code leakage
           let remainingText = response
             .replace(voiceMsgRegex, '')
             .replace(/\[STICKER:[^\]]+\]/gi, '')
             .replace(/\[REACTION:[^\]]+\]/gi, '')
             .replace(/\[IMAGE:[^\]]+\]/gi, '')
             .replace(/\[CALL:[^\]]+\]/gi, '')
-            .replace(/```[\s\S]*?```/g, '')
+            .replace(/\[INTERNAL CODE\][:\s]*[^\n]*/gi, '')  // Remove [INTERNAL CODE]: ... lines
+            .replace(/\[SYSTEM[^\]]*\][:\s]*[^\n]*/gi, '')    // Remove [SYSTEM...]: ... lines
+            .replace(/\[EXECUTED CODE\][:\s]*[^\n]*/gi, '')   // Remove [EXECUTED CODE]: ... 
+            .replace(/\[ASSISTANT PREVIOUSLY SAID\][:\s]*[^\n]*/gi, '') // Remove internal context
+            .replace(/```[\s\S]*?```/g, '')                   // Remove code blocks
             .replace(/\n{2,}/g, ' ')
             .trim();
 
@@ -567,10 +572,21 @@ GIT PROTOCOL (SAFETY FIRST):
       } else {
         // --- NO CODE / FINAL REPLY ---
         if (response) {
-          // Clean excessive newlines (max 2 newlines = 1 empty line)
-          response = response.replace(/\n{3,}/g, '\n\n').trim();
-          await sendReply(response);
-          await this.memory.addMessage('assistant', response);
+          // CRITICAL: Clean all internal markers to prevent code leakage to user
+          response = response
+            .replace(/\[INTERNAL CODE\][:\s]*[^\n]*/gi, '')  // Remove [INTERNAL CODE]: ... lines
+            .replace(/\[SYSTEM[^\]]*\][:\s]*[^\n]*/gi, '')    // Remove [SYSTEM...]: ... lines 
+            .replace(/\[EXECUTED CODE\][:\s]*[^\n]*/gi, '')   // Remove [EXECUTED CODE]: ...
+            .replace(/\[ASSISTANT PREVIOUSLY SAID\][:\s]*[^\n]*/gi, '') // Remove internal context
+            .replace(/```[\s\S]*?```/g, '')                   // Remove any remaining code blocks
+            .replace(/\n{3,}/g, '\n\n')                       // Clean excessive newlines
+            .trim();
+
+          // Only send if there's actual content left after cleaning
+          if (response) {
+            await sendReply(response);
+            await this.memory.addMessage('assistant', response);
+          }
         }
         break; // EXIT LOOP
       }
