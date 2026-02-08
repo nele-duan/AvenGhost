@@ -1,5 +1,6 @@
 import { LLM } from './llm';
 import { IMemorySystem } from './memory';
+import { getHealthContext } from './health';
 
 /**
  * Clean code leakage from text - removes shell commands, file paths, and system markers
@@ -134,8 +135,19 @@ export class Agent {
       console.error('[Agent] Error loading Dynamic Identity:', e);
     }
 
-    // 2. Construct System Prompt
-    const dynamicSystemPrompt = `${this.defaultSystemPrompt}\n\n${soulContent}\n\n${userContent}`;
+    // 2. Load Health Data (Biometric Awareness from Apple Watch)
+    let healthContext = '';
+    try {
+      healthContext = await getHealthContext();
+      if (healthContext) {
+        console.log('[Agent] Health data loaded for context');
+      }
+    } catch (e) {
+      // Silent fail - health data is optional
+    }
+
+    // 3. Construct System Prompt
+    const dynamicSystemPrompt = `${this.defaultSystemPrompt}\n\n${soulContent}\n\n${userContent}\n\n${healthContext}`;
 
     // 3. Memory & Context
     await this.memory.addMessage('user', message);

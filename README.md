@@ -38,6 +38,26 @@
 - **Reactions**: Native Telegram message reactions
 - **Sticker Collection**: Auto-saves stickers you send
 
+### ⌚ Apple Watch Health Integration (NEW!)
+Connect your Apple Watch data to give your AI companion **biometric awareness**:
+
+| Data | What Agent Sees |
+|------|-----------------|
+| ❤️ **Heart Rate** | Real-time + 1-hour average |
+| 💓 **HRV** | Stress level indicator |
+| 💤 **Sleep Status** | Currently sleeping? |
+| 🌙 **Sleep History** | Last night's duration, bedtime, wake time |
+| 📊 **Weekly Average** | 7-day sleep average |
+| 👣 **Steps** | Today's step count |
+
+**Example Agent Behaviors:**
+- 🤥 **Lie Detection**: "你说要睡觉，但心率这么高，骗谁呢？"
+- 😴 **Sleep Concern**: "昨晚才睡4小时？今天要早点休息！"
+- 🌙 **Night Owl Alert**: "凌晨2点才睡？这作息不行啊..."
+- 💕 **Stress Care**: "HRV有点低，压力大吗？"
+
+See [`ios/AvenBridge/README.md`](ios/AvenBridge/README.md) for setup instructions.
+
 ---
 
 ## 🚀 Quick Start

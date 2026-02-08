@@ -4,6 +4,8 @@ import { LLM } from './core/llm';
 import { MemorySystem } from './core/memory';
 import { HeartbeatSystem } from './core/heartbeat';
 import { VoiceSystem } from './core/voice';
+import express from 'express';
+import { setupHealthAPI } from './core/health';
 // Old skills deleted (SystemSkill, FileSkill, SearchSkill)
 // import { SystemSkill } from './skills/system'; 
 import { CHARACTER_PROMPT } from './character'; // Import character
@@ -40,6 +42,15 @@ async function main() {
   } catch (e) {
     console.error('[Startup] Migration failed:', e);
   }
+
+  // 3b. Setup HTTP Server for Health Data API
+  const httpApp = express();
+  httpApp.use(express.json());
+  setupHealthAPI(httpApp);
+  const HEALTH_PORT = process.env.HEALTH_API_PORT || 3000;
+  httpApp.listen(HEALTH_PORT, () => {
+    console.log(`[Health API] Listening on port ${HEALTH_PORT}`);
+  });
 
   // 3. Setup Telegram Bot
   const bot = new Telegraf(BOT_TOKEN, { handlerTimeout: Infinity });
