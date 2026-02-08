@@ -1,69 +1,69 @@
 # AvenBridge 🌉
 
-**Apple Watch → AvenGhost 健康数据桥接 App**
+**Apple Watch → AvenGhost Health Data Bridge**
 
-将你的 Apple Watch 生理数据同步给 AI 伴侣，让他真正"看到"你的状态。
-
----
-
-## ✨ 功能特性
-
-### 实时数据同步
-| 数据 | 说明 |
-|------|------|
-| ❤️ **心率** | 实时 + 1小时平均 |
-| 💓 **HRV** | 心率变异性（压力指标） |
-| 💤 **睡眠状态** | 是否正在睡觉 |
-| 🌙 **昨晚睡眠** | 睡眠时长、入睡时间、醒来时间 |
-| 📊 **周平均** | 近7天平均睡眠时长 |
-| 👣 **步数** | 今日步数统计 |
-
-### Agent 行为触发
-- 🤥 **说谎检测**: 说要睡觉但心率活跃 → 吐槽
-- 😴 **睡眠关心**: 昨晚睡太少 → 催早休息
-- 🌙 **熬夜警告**: 凌晨1点后才睡 → 提醒作息
-- 💕 **压力关心**: HRV过低 → 温柔模式
+Sync your Apple Watch biometric data to your AI companion, giving them real awareness of your physical state.
 
 ---
 
-## 🚀 安装步骤
+## ✨ Features
 
-### 1. 创建 Xcode 项目
+### Real-Time Data Sync
+| Data | Description |
+|------|-------------|
+| ❤️ **Heart Rate** | Real-time + 1-hour average |
+| 💓 **HRV** | Heart Rate Variability (stress indicator) |
+| 💤 **Sleep Status** | Currently sleeping or awake |
+| 🌙 **Last Night's Sleep** | Duration, bedtime, wake time |
+| 📊 **Weekly Average** | 7-day average sleep duration |
+| 👣 **Steps** | Today's step count |
 
-1. 打开 Xcode → **Create New Project**
-2. 选择 **iOS → App**
-3. 填写信息：
+### Agent Behavior Triggers
+- 🤥 **Lie Detection**: Claims to be sleeping but heart rate is active → Gets called out
+- 😴 **Sleep Concern**: Slept too little last night → Reminds to rest early
+- 🌙 **Night Owl Alert**: Went to bed after 1 AM → Warns about sleep schedule
+- 💕 **Stress Care**: Low HRV detected → Switches to caring mode
+
+---
+
+## 🚀 Setup Instructions
+
+### 1. Create Xcode Project
+
+1. Open Xcode → **Create New Project**
+2. Select **iOS → App**
+3. Configure:
    - Product Name: `AvenBridge`
    - Interface: **SwiftUI**
    - Language: **Swift**
 
-### 2. 添加 HealthKit 能力
+### 2. Add HealthKit Capability
 
-1. 选择项目 → **Signing & Capabilities**
-2. 点击 **+ Capability**
-3. 添加 **HealthKit**
-4. 勾选 **Background Delivery**（可选）
+1. Select project → **Signing & Capabilities**
+2. Click **+ Capability**
+3. Add **HealthKit**
+4. Enable **Background Delivery** (optional)
 
-### 3. 复制代码文件
+### 3. Copy Source Files
 
-把以下文件拖入 Xcode 项目：
+Drag these files into your Xcode project:
 
 ```
 AvenBridge/
-├── AvenBridgeApp.swift   # App 入口
-├── ContentView.swift     # 主界面
-├── HealthManager.swift   # HealthKit 数据读取
-├── APIClient.swift       # 服务器通信
-└── Info.plist            # 权限配置
+├── AvenBridgeApp.swift   # App entry point
+├── ContentView.swift     # Main UI
+├── HealthManager.swift   # HealthKit data fetching
+├── APIClient.swift       # Server communication
+└── Info.plist            # Permission configuration
 ```
 
-### 4. 配置 Info.plist
+### 4. Configure Info.plist
 
-在 Info.plist 中添加：
+Add to Info.plist:
 
 ```xml
 <key>NSHealthShareUsageDescription</key>
-<string>AvenBridge 需要读取你的健康数据来同步给 AI 伴侣</string>
+<string>AvenBridge needs to read your health data to sync with your AI companion.</string>
 
 <key>NSAppTransportSecurity</key>
 <dict>
@@ -72,19 +72,19 @@ AvenBridge/
 </dict>
 ```
 
-### 5. 运行 App
+### 5. Run the App
 
-1. 连接 iPhone（需要真机，模拟器没有健康数据）
-2. 点击 ▶️ 运行
-3. 授权 HealthKit 访问
-4. 填写服务器 URL: `http://你的服务器IP:3000`
-5. 点击 **Sync Now** 测试
+1. Connect iPhone (real device required — simulator has no health data)
+2. Click ▶️ to run
+3. Grant HealthKit permissions
+4. Enter server URL: `http://YOUR_SERVER_IP:3000`
+5. Tap **Sync Now** to test
 
 ---
 
-## 📡 服务器 API
+## 📡 Server API
 
-App 推送数据到 `POST /api/health`：
+The app pushes data to `POST /api/health`:
 
 ```json
 {
@@ -103,32 +103,32 @@ App 推送数据到 `POST /api/health`：
 
 ---
 
-## 🔐 安全说明
+## 🔐 Security
 
-- 数据直接发送到**你自己的服务器**，无第三方
-- 使用 API Key 认证（`X-API-Key` header）
-- 建议在生产环境设置强 API Key
-
----
-
-## ⚙️ 日常使用
-
-1. 打开 App
-2. 开启 **Auto Sync**（每60秒自动同步）
-3. App 可以放后台
-
-> 💡 开发者账号的 App 可以用 1 年，到期重新 Build 即可
+- Data is sent directly to **your own server** — no third parties
+- Uses API Key authentication (`X-API-Key` header)
+- Set a strong `HEALTH_API_KEY` in production
 
 ---
 
-## 🔧 常见问题
+## ⚙️ Daily Usage
 
-| 问题 | 解决方案 |
-|------|----------|
-| HealthKit 数据为 0 | 需要 Apple Watch 配对 |
-| Sync 失败 | 检查服务器 URL 和防火墙 |
-| App Transport Security 错误 | Info.plist 添加许可任意网络 |
-| Untrusted Developer | 设置 → VPN与设备管理 → 信任 |
+1. Open the app
+2. Enable **Auto Sync** (syncs every 60 seconds)
+3. App can run in background
+
+> 💡 Apps built with a paid developer account last 1 year. Just rebuild when expired.
+
+---
+
+## 🔧 Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| HealthKit data shows 0 | Requires paired Apple Watch |
+| Sync fails | Check server URL and firewall |
+| App Transport Security error | Add NSAllowsArbitraryLoads to Info.plist |
+| Untrusted Developer | Settings → VPN & Device Management → Trust |
 
 ---
 
