@@ -508,39 +508,58 @@ GIT PROTOCOL (SAFETY FIRST):
             console.log(`[Agent] Voice message SKIPPED: Workday work hours (${day}@${hour}:00)`);
             // Don't send voice, let the text through instead
           } else {
-            // Get the remaining text (after removing all tags) to merge into voice
-            // CRITICAL: Filter out ALL internal/system markers and code to prevent leakage
-            let remainingText = response
-              .replace(voiceMsgRegex, '')
-              .replace(/\[STICKER:[^\]]+\]/gi, '')
-              .replace(/\[REACTION:[^\]]+\]/gi, '')
-              .replace(/\[IMAGE:[^\]]+\]/gi, '')
-              .replace(/\[CALL:[^\]]+\]/gi, '')
-              .replace(/\[.*?\]\(.*?\)/g, '')  // Remove markdown links
-              .replace(/\n{2,}/g, ' ')
-              .trim();
+            // HYBRID FREQUENCY CONTROL: 25% random + 100% for special scenarios
+            const lowerText = textToSpeak.toLowerCase();
+            const isSpecialScenario =
+              lowerText.includes('早安') || lowerText.includes('晚安') ||
+              lowerText.includes('good morning') || lowerText.includes('good night') ||
+              lowerText.includes('生日') || lowerText.includes('birthday') ||
+              lowerText.includes('抱抱') || lowerText.includes('想你') ||
+              lowerText.includes('爱你') || lowerText.includes('love you') ||
+              lowerText.includes('没事') || lowerText.includes('别难过') ||
+              lowerText.includes('加油') || lowerText.includes('辛苦了') ||
+              hour >= 22 || hour < 7; // Night time = more voice for coziness
 
-            // Apply comprehensive code leakage cleaning
-            remainingText = cleanCodeLeakage(remainingText);
+            const randomChance = Math.random() < 0.25; // 25% chance for normal messages
+            const shouldSendVoice = isSpecialScenario || randomChance;
 
-            // Merge remaining text into voice message
-            if (remainingText && !remainingText.match(/^\[.*\]$/)) {
-              // Only merge if it's actual content, not just links
-              const nonLinkText = remainingText.replace(/\[.*?\]\(.*?\)/g, '').trim();
-              if (nonLinkText) {
-                textToSpeak = `${textToSpeak} ${nonLinkText}`;
+            if (!shouldSendVoice) {
+              console.log(`[Agent] Voice message SKIPPED: Random filter (25% chance not met)`);
+            } else {
+              // Get the remaining text (after removing all tags) to merge into voice
+              // CRITICAL: Filter out ALL internal/system markers and code to prevent leakage
+              let remainingText = response
+                .replace(voiceMsgRegex, '')
+                .replace(/\[STICKER:[^\]]+\]/gi, '')
+                .replace(/\[REACTION:[^\]]+\]/gi, '')
+                .replace(/\[IMAGE:[^\]]+\]/gi, '')
+                .replace(/\[CALL:[^\]]+\]/gi, '')
+                .replace(/\[.*?\]\(.*?\)/g, '')  // Remove markdown links
+                .replace(/\n{2,}/g, ' ')
+                .trim();
+
+              // Apply comprehensive code leakage cleaning
+              remainingText = cleanCodeLeakage(remainingText);
+
+              // Merge remaining text into voice message
+              if (remainingText && !remainingText.match(/^\[.*\]$/)) {
+                // Only merge if it's actual content, not just links
+                const nonLinkText = remainingText.replace(/\[.*?\]\(.*?\)/g, '').trim();
+                if (nonLinkText) {
+                  textToSpeak = `${textToSpeak} ${nonLinkText}`;
+                }
               }
+
+              // No longer truncating voice messages - let them play in full
+              console.log(`[Agent] Voice message length: ${textToSpeak.length} chars`);
+
+              console.log(`[Agent] Sending voice message: "${textToSpeak.substring(0, 50)}..."`);
+              await sendVoiceMessage(textToSpeak);
+              voiceMessageSent = true;
+
+              // Save what was spoken to memory (use format that won't confuse LLM)
+              await this.memory.addMessage('assistant', `(语音消息已发送: ${textToSpeak.substring(0, 50)}...)`);
             }
-
-            // No longer truncating voice messages - let them play in full
-            console.log(`[Agent] Voice message length: ${textToSpeak.length} chars`);
-
-            console.log(`[Agent] Sending voice message: "${textToSpeak.substring(0, 50)}..."`);
-            await sendVoiceMessage(textToSpeak);
-            voiceMessageSent = true;
-
-            // Save what was spoken to memory (use format that won't confuse LLM)
-            await this.memory.addMessage('assistant', `(语音消息已发送: ${textToSpeak.substring(0, 50)}...)`);
           }
         }
       }
