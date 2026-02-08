@@ -5,6 +5,8 @@ services:
     build: .
     container_name: avenghost
     restart: unless-stopped
+    ports:
+      - "3000:3000"  # Health API for iOS AvenBridge app
     volumes:
       - ./data:/app/data
       - ./workspace:/app/workspace
