@@ -1,6 +1,31 @@
 import { LLM } from './llm';
 import { IMemorySystem } from './memory';
 
+/**
+ * Clean code leakage from text - removes shell commands, file paths, and system markers
+ * This prevents internal code from leaking to user-facing messages and voice
+ */
+function cleanCodeLeakage(text: string): string {
+  return text
+    // Remove [INTERNAL CODE], [SYSTEM], [EXECUTED CODE] and similar markers with their content
+    .replace(/\[INTERNAL CODE\][:\s]*[\s\S]*?(?=\n[^\s]|$)/gi, '')
+    .replace(/\[SYSTEM[^\]]*\][:\s]*[\s\S]*?(?=\n[^\s]|$)/gi, '')
+    .replace(/\[EXECUTED CODE\][:\s]*[\s\S]*?(?=\n[^\s]|$)/gi, '')
+    .replace(/\[ASSISTANT PREVIOUSLY SAID\][:\s]*[\s\S]*?(?=\n[^\s]|$)/gi, '')
+    // Remove code blocks
+    .replace(/```[\s\S]*?```/g, '')
+    // Remove shell command lines (cat, echo, cd, ls, mkdir, rm, mv, cp, etc.)
+    .replace(/^\s*(cat|echo|cd|ls|mkdir|rm|rmdir|mv|cp|chmod|chown|touch|pwd|grep|sed|awk|curl|wget|git|npm|node|docker|nsenter)\s+.*/gim, '')
+    // Remove lines that look like file paths (data/xxx, /path/to/file, ./xxx)
+    .replace(/^\s*[\w./-]*\/(users|data|temp|tmp|logs|config|src|dist)\/[^\n]*/gim, '')
+    // Remove lines starting with common code patterns
+    .replace(/^\s*>\s*(data|temp|tmp)\/[^\n]*/gim, '')  // >> data/xxx redirects
+    .replace(/^\s*"[^"]*"\s*>+\s*[\w./]+/gim, '')  // "content" > file patterns
+    // Clean up excessive whitespace left behind
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export class Agent {
   private llm: LLM;
   private memory: IMemorySystem;
@@ -458,20 +483,19 @@ GIT PROTOCOL (SAFETY FIRST):
 
         if (sendVoiceMessage && textToSpeak && !voiceMessageSent) {
           // Get the remaining text (after removing all tags) to merge into voice
-          // CRITICAL: Filter out ALL internal/system markers to prevent code leakage
+          // CRITICAL: Filter out ALL internal/system markers and code to prevent leakage
           let remainingText = response
             .replace(voiceMsgRegex, '')
             .replace(/\[STICKER:[^\]]+\]/gi, '')
             .replace(/\[REACTION:[^\]]+\]/gi, '')
             .replace(/\[IMAGE:[^\]]+\]/gi, '')
             .replace(/\[CALL:[^\]]+\]/gi, '')
-            .replace(/\[INTERNAL CODE\][:\s]*[^\n]*/gi, '')  // Remove [INTERNAL CODE]: ... lines
-            .replace(/\[SYSTEM[^\]]*\][:\s]*[^\n]*/gi, '')    // Remove [SYSTEM...]: ... lines
-            .replace(/\[EXECUTED CODE\][:\s]*[^\n]*/gi, '')   // Remove [EXECUTED CODE]: ... 
-            .replace(/\[ASSISTANT PREVIOUSLY SAID\][:\s]*[^\n]*/gi, '') // Remove internal context
-            .replace(/```[\s\S]*?```/g, '')                   // Remove code blocks
+            .replace(/\[.*?\]\(.*?\)/g, '')  // Remove markdown links
             .replace(/\n{2,}/g, ' ')
             .trim();
+
+          // Apply comprehensive code leakage cleaning
+          remainingText = cleanCodeLeakage(remainingText);
 
           // Merge remaining text into voice message
           if (remainingText && !remainingText.match(/^\[.*\]$/)) {
@@ -572,15 +596,8 @@ GIT PROTOCOL (SAFETY FIRST):
       } else {
         // --- NO CODE / FINAL REPLY ---
         if (response) {
-          // CRITICAL: Clean all internal markers to prevent code leakage to user
-          response = response
-            .replace(/\[INTERNAL CODE\][:\s]*[^\n]*/gi, '')  // Remove [INTERNAL CODE]: ... lines
-            .replace(/\[SYSTEM[^\]]*\][:\s]*[^\n]*/gi, '')    // Remove [SYSTEM...]: ... lines 
-            .replace(/\[EXECUTED CODE\][:\s]*[^\n]*/gi, '')   // Remove [EXECUTED CODE]: ...
-            .replace(/\[ASSISTANT PREVIOUSLY SAID\][:\s]*[^\n]*/gi, '') // Remove internal context
-            .replace(/```[\s\S]*?```/g, '')                   // Remove any remaining code blocks
-            .replace(/\n{3,}/g, '\n\n')                       // Clean excessive newlines
-            .trim();
+          // CRITICAL: Clean all code leakage to prevent internal commands from reaching user
+          response = cleanCodeLeakage(response);
 
           // Only send if there's actual content left after cleaning
           if (response) {
