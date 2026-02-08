@@ -51,10 +51,10 @@ Connect your Apple Watch data to give your AI companion **biometric awareness**:
 | 👣 **Steps** | Today's step count |
 
 **Example Agent Behaviors:**
-- 🤥 **Lie Detection**: "你说要睡觉，但心率这么高，骗谁呢？"
-- 😴 **Sleep Concern**: "昨晚才睡4小时？今天要早点休息！"
-- 🌙 **Night Owl Alert**: "凌晨2点才睡？这作息不行啊..."
-- 💕 **Stress Care**: "HRV有点低，压力大吗？"
+- 🤥 **Lie Detection**: "You said you're going to sleep, but your heart rate is so high... who are you fooling?"
+- 😴 **Sleep Concern**: "Only 4 hours last night? You need to rest earlier today!"
+- 🌙 **Night Owl Alert**: "Asleep at 2 AM? That sleep schedule needs work..."
+- 💕 **Stress Care**: "Your HRV is a bit low — feeling stressed?"
 
 See [`ios/AvenBridge/README.md`](ios/AvenBridge/README.md) for setup instructions.
 
