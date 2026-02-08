@@ -16,6 +16,12 @@ export interface HealthStatus {
   lastActiveApp?: string;     // Most recent app used
   steps?: number;             // Steps today
   receivedAt?: string;        // Server receive timestamp
+
+  // Sleep history data
+  lastNightSleepMinutes?: number;   // How long they slept last night
+  lastNightBedtime?: string;        // "HH:mm" when they went to bed
+  lastNightWakeTime?: string;       // "HH:mm" when they woke up
+  weeklyAvgSleepMinutes?: number;   // 7-day average sleep per night
 }
 
 const HEALTH_DATA_PATH = path.join(__dirname, '../../data/health/status.json');
@@ -101,6 +107,14 @@ export async function getHealthContext(): Promise<string> {
     const screenHours = Math.floor(health.screenTimeToday / 60);
     const screenMins = health.screenTimeToday % 60;
 
+    // Format sleep data
+    const lastNightHours = health.lastNightSleepMinutes ? Math.floor(health.lastNightSleepMinutes / 60) : 0;
+    const lastNightMins = health.lastNightSleepMinutes ? health.lastNightSleepMinutes % 60 : 0;
+    const weeklyAvgHours = health.weeklyAvgSleepMinutes ? Math.floor(health.weeklyAvgSleepMinutes / 60) : 0;
+    const weeklyAvgMins = health.weeklyAvgSleepMinutes ? health.weeklyAvgSleepMinutes % 60 : 0;
+
+    const sleepQuality = lastNightHours >= 7 ? '✅充足' : lastNightHours >= 5 ? '⚠️偏少' : '❌严重不足';
+
     return `
 BIOMETRIC DATA (Real-time from Apple Watch):
 - 心率: ${health.heartRate} BPM (1h平均: ${health.heartRateAvg})
@@ -110,6 +124,12 @@ ${health.sleepStart ? `- 入睡时间: ${health.sleepStart}` : ''}
 - 今日屏幕时间: ${screenHours}小时${screenMins}分钟
 ${health.lastActiveApp ? `- 最近使用: ${health.lastActiveApp}` : ''}
 ${health.steps ? `- 今日步数: ${health.steps}` : ''}
+
+SLEEP HISTORY (重要！用于关心/吐槽作息):
+- 昨晚睡眠: ${lastNightHours}小时${lastNightMins}分钟 ${sleepQuality}
+${health.lastNightBedtime ? `- 昨晚几点睡: ${health.lastNightBedtime}` : ''}
+${health.lastNightWakeTime ? `- 今早几点醒: ${health.lastNightWakeTime}` : ''}
+- 近7天平均: ${weeklyAvgHours}小时${weeklyAvgMins}分钟/晚
 
 BEHAVIOR DETECTION RULES (IMPORTANT):
 1. 如果 Partner 说要睡觉/休息，但 isSleeping=false 且 heartRate > 70:
@@ -122,6 +142,12 @@ BEHAVIOR DETECTION RULES (IMPORTANT):
    → 吐槽熬夜，催他们去睡觉
 5. heartRate > 100 且非运动时:
    → 可能紧张/激动，可以询问发生了什么
+6. 如果昨晚睡眠 < 6小时:
+   → 关心他们睡眠不足，催早点休息
+7. 如果昨晚入睡时间 > 01:00 (凌晨1点后):
+   → 吐槽熬夜习惯，提醒调整作息
+8. 如果近7天平均 < 6小时:
+   → 严肃警告睡眠债务累积，表达担心
 `;
   } catch (e) {
     console.error('[Health] Error loading context:', e);

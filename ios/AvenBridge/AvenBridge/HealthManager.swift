@@ -15,6 +15,12 @@ class HealthManager: ObservableObject {
     @Published var lastUpdate: Date? = nil
     @Published var isAuthorized: Bool = false
     
+    // Sleep history data
+    @Published var lastNightSleepMinutes: Int = 0
+    @Published var lastNightBedtime: Date? = nil
+    @Published var lastNightWakeTime: Date? = nil
+    @Published var weeklyAvgSleepMinutes: Int = 0
+    
     // Types we want to read
     private let typesToRead: Set<HKSampleType> = [
         HKQuantityType(.heartRate),
@@ -155,6 +161,117 @@ class HealthManager: ObservableObject {
         }
     }
     
+    /// Fetch last night's sleep data
+    func fetchLastNightSleep() async throws -> (duration: Int, bedtime: Date?, wakeTime: Date?) {
+        let sleepType = HKCategoryType(.sleepAnalysis)
+        let calendar = Calendar.current
+        
+        // Look back 24 hours to find last night's sleep
+        let now = Date()
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: now)!
+        let predicate = HKQuery.predicateForSamples(withStart: yesterday, end: now)
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: sleepType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [sortDescriptor]
+            ) { _, samples, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                
+                guard let sleepSamples = samples as? [HKCategorySample], !sleepSamples.isEmpty else {
+                    continuation.resume(returning: (0, nil, nil))
+                    return
+                }
+                
+                // Filter for actual sleep (not awake periods)
+                let actualSleep = sleepSamples.filter { sample in
+                    let value = HKCategoryValueSleepAnalysis(rawValue: sample.value)
+                    return value != .awake && value != .inBed
+                }
+                
+                guard !actualSleep.isEmpty else {
+                    continuation.resume(returning: (0, nil, nil))
+                    return
+                }
+                
+                // Calculate total sleep duration
+                var totalMinutes = 0
+                var earliestBedtime: Date? = nil
+                var latestWakeTime: Date? = nil
+                
+                for sample in actualSleep {
+                    let duration = sample.endDate.timeIntervalSince(sample.startDate) / 60
+                    totalMinutes += Int(duration)
+                    
+                    if earliestBedtime == nil || sample.startDate < earliestBedtime! {
+                        earliestBedtime = sample.startDate
+                    }
+                    if latestWakeTime == nil || sample.endDate > latestWakeTime! {
+                        latestWakeTime = sample.endDate
+                    }
+                }
+                
+                continuation.resume(returning: (totalMinutes, earliestBedtime, latestWakeTime))
+            }
+            
+            healthStore.execute(query)
+        }
+    }
+    
+    /// Fetch weekly average sleep duration
+    func fetchWeeklySleepAverage() async throws -> Int {
+        let sleepType = HKCategoryType(.sleepAnalysis)
+        let calendar = Calendar.current
+        
+        // Look back 7 days
+        let now = Date()
+        let sevenDaysAgo = calendar.date(byAdding: .day, value: -7, to: now)!
+        let predicate = HKQuery.predicateForSamples(withStart: sevenDaysAgo, end: now)
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: sleepType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: nil
+            ) { _, samples, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                
+                guard let sleepSamples = samples as? [HKCategorySample], !sleepSamples.isEmpty else {
+                    continuation.resume(returning: 0)
+                    return
+                }
+                
+                // Filter for actual sleep
+                let actualSleep = sleepSamples.filter { sample in
+                    let value = HKCategoryValueSleepAnalysis(rawValue: sample.value)
+                    return value != .awake && value != .inBed
+                }
+                
+                // Calculate total sleep and average per day
+                var totalMinutes = 0
+                for sample in actualSleep {
+                    let duration = sample.endDate.timeIntervalSince(sample.startDate) / 60
+                    totalMinutes += Int(duration)
+                }
+                
+                let avgPerDay = totalMinutes / 7
+                continuation.resume(returning: avgPerDay)
+            }
+            
+            healthStore.execute(query)
+        }
+    }
+    
     /// Fetch today's step count
     func fetchSteps() async throws -> Int {
         let stepsType = HKQuantityType(.stepCount)
@@ -192,9 +309,17 @@ class HealthManager: ObservableObject {
             isSleeping = sleepStatus.isSleeping
             sleepStart = sleepStatus.sleepStart
             steps = try await fetchSteps()
+            
+            // Fetch sleep history
+            let lastNight = try await fetchLastNightSleep()
+            lastNightSleepMinutes = lastNight.duration
+            lastNightBedtime = lastNight.bedtime
+            lastNightWakeTime = lastNight.wakeTime
+            weeklyAvgSleepMinutes = try await fetchWeeklySleepAverage()
+            
             lastUpdate = Date()
             
-            print("[Health] Data refreshed: HR=\(heartRate), HRV=\(hrv), Sleeping=\(isSleeping)")
+            print("[Health] Data refreshed: HR=\(heartRate), HRV=\(hrv), Sleep last night=\(lastNightSleepMinutes)min")
         } catch {
             print("[Health] Error refreshing data: \(error)")
         }
@@ -203,6 +328,8 @@ class HealthManager: ObservableObject {
     /// Build HealthStatus object for API
     func buildHealthStatus(screenTimeMinutes: Int = 0, lastApp: String? = nil) -> HealthStatus {
         let formatter = ISO8601DateFormatter()
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "HH:mm"
         
         return HealthStatus(
             timestamp: formatter.string(from: Date()),
@@ -213,7 +340,11 @@ class HealthManager: ObservableObject {
             sleepStart: sleepStart.map { formatter.string(from: $0) },
             screenTimeToday: screenTimeMinutes,
             lastActiveApp: lastApp,
-            steps: steps
+            steps: steps,
+            lastNightSleepMinutes: lastNightSleepMinutes,
+            lastNightBedtime: lastNightBedtime.map { timeFormatter.string(from: $0) },
+            lastNightWakeTime: lastNightWakeTime.map { timeFormatter.string(from: $0) },
+            weeklyAvgSleepMinutes: weeklyAvgSleepMinutes
         )
     }
 }

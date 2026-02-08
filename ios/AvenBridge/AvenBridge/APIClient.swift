@@ -11,6 +11,12 @@ struct HealthStatus: Codable {
     let screenTimeToday: Int  // in minutes
     let lastActiveApp: String?
     let steps: Int?
+    
+    // Sleep history
+    let lastNightSleepMinutes: Int?
+    let lastNightBedtime: String?     // "HH:mm" format
+    let lastNightWakeTime: String?    // "HH:mm" format
+    let weeklyAvgSleepMinutes: Int?
 }
 
 /// API client for communicating with AvenGhost server
