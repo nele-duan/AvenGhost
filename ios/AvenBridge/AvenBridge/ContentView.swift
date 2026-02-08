@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct ContentView: View {
     @StateObject private var healthManager = HealthManager()
@@ -59,18 +60,18 @@ struct ContentView: View {
                     TextField("Server URL", text: $serverURL)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.URL)
-                        .onChange(of: serverURL) { newValue in
-                            UserDefaults.standard.set(newValue, forKey: "serverURL")
+                        .onChange(of: serverURL) {
+                            UserDefaults.standard.set(serverURL, forKey: "serverURL")
                         }
                     
                     SecureField("API Key", text: $apiKey)
-                        .onChange(of: apiKey) { newValue in
-                            UserDefaults.standard.set(newValue, forKey: "apiKey")
+                        .onChange(of: apiKey) {
+                            UserDefaults.standard.set(apiKey, forKey: "apiKey")
                         }
                     
                     Toggle("Auto Sync (every 60s)", isOn: $autoSyncEnabled)
-                        .onChange(of: autoSyncEnabled) { newValue in
-                            UserDefaults.standard.set(newValue, forKey: "autoSync")
+                        .onChange(of: autoSyncEnabled) {
+                            UserDefaults.standard.set(autoSyncEnabled, forKey: "autoSync")
                         }
                 }
                 

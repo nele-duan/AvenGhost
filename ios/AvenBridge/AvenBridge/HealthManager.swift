@@ -1,5 +1,6 @@
 import Foundation
 import HealthKit
+import Combine
 
 /// Manager for all HealthKit data access
 class HealthManager: ObservableObject {
