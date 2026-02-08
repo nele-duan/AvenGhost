@@ -55,6 +55,21 @@ struct ContentView: View {
                     DataRow(icon: "figure.walk", label: "Steps Today", value: "\(healthManager.steps)", color: .green)
                 }
                 
+                // Sleep History Section
+                Section("Last Night's Sleep") {
+                    let hours = healthManager.lastNightSleepMinutes / 60
+                    let mins = healthManager.lastNightSleepMinutes % 60
+                    DataRow(icon: "bed.double.fill", label: "Duration", value: "\(hours)h \(mins)m", color: .indigo)
+                    
+                    DataRow(icon: "moon.stars.fill", label: "Bedtime", value: formatTime(healthManager.lastNightBedtime), color: .blue)
+                    
+                    DataRow(icon: "sunrise.fill", label: "Wake Time", value: formatTime(healthManager.lastNightWakeTime), color: .orange)
+                    
+                    let weeklyHours = healthManager.weeklyAvgSleepMinutes / 60
+                    let weeklyMins = healthManager.weeklyAvgSleepMinutes % 60
+                    DataRow(icon: "chart.bar.fill", label: "Weekly Avg", value: "\(weeklyHours)h \(weeklyMins)m", color: .teal)
+                }
+                
                 // Configuration Section
                 Section("Server Configuration") {
                     TextField("Server URL", text: $serverURL)
@@ -69,7 +84,7 @@ struct ContentView: View {
                             UserDefaults.standard.set(apiKey, forKey: "apiKey")
                         }
                     
-                    Toggle("Auto Sync (every 60s)", isOn: $autoSyncEnabled)
+                    Toggle("Auto Sync (every 5min)", isOn: $autoSyncEnabled)
                         .onChange(of: autoSyncEnabled) {
                             UserDefaults.standard.set(autoSyncEnabled, forKey: "autoSync")
                         }
@@ -179,6 +194,14 @@ struct DataRow: View {
                 .fontWeight(.medium)
         }
     }
+}
+
+// Helper function to format time
+func formatTime(_ date: Date?) -> String {
+    guard let date = date else { return "--:--" }
+    let formatter = DateFormatter()
+    formatter.dateFormat = "HH:mm"
+    return formatter.string(from: date)
 }
 
 #Preview {
