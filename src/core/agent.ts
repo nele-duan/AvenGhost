@@ -14,6 +14,8 @@ function cleanCodeLeakage(text: string): string {
     .replace(/\[ASSISTANT PREVIOUSLY SAID\][:\s]*[\s\S]*?(?=\n[^\s]|$)/gi, '')
     // Remove code blocks
     .replace(/```[\s\S]*?```/g, '')
+    // Remove leaked VOICE: prefix (LLM sometimes outputs this instead of [VOICE_MSG:])
+    .replace(/^\s*VOICE\s*:\s*/gim, '')
     // Remove shell command lines (cat, echo, cd, ls, mkdir, rm, mv, cp, etc.)
     .replace(/^\s*(cat|echo|cd|ls|mkdir|rm|rmdir|mv|cp|chmod|chown|touch|pwd|grep|sed|awk|curl|wget|git|npm|node|docker|nsenter)\s+.*/gim, '')
     // Remove lines that look like file paths (data/xxx, /path/to/file, ./xxx)
@@ -513,8 +515,8 @@ GIT PROTOCOL (SAFETY FIRST):
           await sendVoiceMessage(textToSpeak);
           voiceMessageSent = true;
 
-          // Save what the user ACTUALLY heard to memory
-          await this.memory.addMessage('assistant', `[VOICE]: ${textToSpeak}`);
+          // Save what was spoken to memory (use format that won't confuse LLM)
+          await this.memory.addMessage('assistant', `(语音消息已发送: ${textToSpeak.substring(0, 50)}...)`);
         }
       }
       response = response.replace(voiceMsgRegex, '').trim();
