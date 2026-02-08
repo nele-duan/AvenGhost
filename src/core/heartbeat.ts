@@ -1,4 +1,5 @@
 import { Agent } from './agent';
+import { getHealthContext } from './health';
 
 export class HeartbeatSystem {
   private agent: Agent;
@@ -56,12 +57,34 @@ export class HeartbeatSystem {
 
     const userId = "8561600191"; // Hardcoded for single-user mode
 
+    // Load health data to include in heartbeat context
+    let healthContext = '';
+    try {
+      healthContext = await getHealthContext();
+      if (healthContext) {
+        console.log('[Heartbeat] Health data loaded for proactive check');
+      }
+    } catch (e) {
+      // Silent fail - health data is optional
+    }
+
     const prompt = `[SYSTEM EVENT: TIME PASSAGE]
 It is now ${now.toISOString()}. 
 You have not spoken to the user in a while (Automatic 2-hour check). 
+
+${healthContext ? `CURRENT BIOMETRIC STATUS FROM APPLE WATCH:
+${healthContext}
+
+Based on this health data, you may:
+- If it's late (after 23:00) and they're still awake (isSleeping=false), remind them to sleep
+- If HRV is low, ask if they're stressed
+- If they slept poorly last night, express concern
+- If heart rate is unusually high/low, inquire about it
+` : ''}
+
 Check the system status silently. 
 If everything is fine, maybe send a short greeting, a check-in, or share a relevant thought.
-If you find an issue, report it.
+If you find an issue or notice something in the health data, comment on it naturally.
 DECIDE: Stay silent (Output "") or Speak.`;
 
     // Define the reply callback for the agent

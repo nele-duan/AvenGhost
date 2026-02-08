@@ -10,7 +10,7 @@ struct ContentView: View {
     @State private var isSyncing: Bool = false
     @State private var autoSyncEnabled: Bool = UserDefaults.standard.bool(forKey: "autoSync")
     
-    private let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
+    private let timer = Timer.publish(every: 300, on: .main, in: .common).autoconnect()  // 5 minutes
     
     var body: some View {
         NavigationView {
