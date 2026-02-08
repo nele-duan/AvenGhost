@@ -543,7 +543,14 @@ GIT PROTOCOL (SAFETY FIRST):
           }
         }
       }
-      response = response.replace(voiceMsgRegex, '').trim();
+
+      // Strip voice tags - but keep text content if voice wasn't actually sent
+      if (voiceMessageSent) {
+        response = response.replace(voiceMsgRegex, '').trim();
+      } else {
+        // Voice was skipped (e.g., work hours) - convert to plain text
+        response = response.replace(voiceMsgRegex, '$1').trim();
+      }
 
       // If voice message was sent, only keep links in response (strip other text)
       if (voiceMessageSent) {
