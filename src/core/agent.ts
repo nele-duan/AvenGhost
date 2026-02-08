@@ -496,39 +496,51 @@ GIT PROTOCOL (SAFETY FIRST):
         let textToSpeak = matchVoice[1].trim();
 
         if (sendVoiceMessage && textToSpeak && !voiceMessageSent) {
-          // Get the remaining text (after removing all tags) to merge into voice
-          // CRITICAL: Filter out ALL internal/system markers and code to prevent leakage
-          let remainingText = response
-            .replace(voiceMsgRegex, '')
-            .replace(/\[STICKER:[^\]]+\]/gi, '')
-            .replace(/\[REACTION:[^\]]+\]/gi, '')
-            .replace(/\[IMAGE:[^\]]+\]/gi, '')
-            .replace(/\[CALL:[^\]]+\]/gi, '')
-            .replace(/\[.*?\]\(.*?\)/g, '')  // Remove markdown links
-            .replace(/\n{2,}/g, ' ')
-            .trim();
+          // WORKDAY RESTRICTION: Skip voice messages during work hours (Mon-Fri 9:00-18:00)
+          const now = new Date();
+          const hour = now.getHours();
+          const day = now.getDay(); // 0=Sun, 1-5=Mon-Fri, 6=Sat
+          const isWorkday = day >= 1 && day <= 5;
+          const isWorkHours = hour >= 9 && hour < 18;
 
-          // Apply comprehensive code leakage cleaning
-          remainingText = cleanCodeLeakage(remainingText);
+          if (isWorkday && isWorkHours) {
+            console.log(`[Agent] Voice message SKIPPED: Workday work hours (${day}@${hour}:00)`);
+            // Don't send voice, let the text through instead
+          } else {
+            // Get the remaining text (after removing all tags) to merge into voice
+            // CRITICAL: Filter out ALL internal/system markers and code to prevent leakage
+            let remainingText = response
+              .replace(voiceMsgRegex, '')
+              .replace(/\[STICKER:[^\]]+\]/gi, '')
+              .replace(/\[REACTION:[^\]]+\]/gi, '')
+              .replace(/\[IMAGE:[^\]]+\]/gi, '')
+              .replace(/\[CALL:[^\]]+\]/gi, '')
+              .replace(/\[.*?\]\(.*?\)/g, '')  // Remove markdown links
+              .replace(/\n{2,}/g, ' ')
+              .trim();
 
-          // Merge remaining text into voice message
-          if (remainingText && !remainingText.match(/^\[.*\]$/)) {
-            // Only merge if it's actual content, not just links
-            const nonLinkText = remainingText.replace(/\[.*?\]\(.*?\)/g, '').trim();
-            if (nonLinkText) {
-              textToSpeak = `${textToSpeak} ${nonLinkText}`;
+            // Apply comprehensive code leakage cleaning
+            remainingText = cleanCodeLeakage(remainingText);
+
+            // Merge remaining text into voice message
+            if (remainingText && !remainingText.match(/^\[.*\]$/)) {
+              // Only merge if it's actual content, not just links
+              const nonLinkText = remainingText.replace(/\[.*?\]\(.*?\)/g, '').trim();
+              if (nonLinkText) {
+                textToSpeak = `${textToSpeak} ${nonLinkText}`;
+              }
             }
+
+            // No longer truncating voice messages - let them play in full
+            console.log(`[Agent] Voice message length: ${textToSpeak.length} chars`);
+
+            console.log(`[Agent] Sending voice message: "${textToSpeak.substring(0, 50)}..."`);
+            await sendVoiceMessage(textToSpeak);
+            voiceMessageSent = true;
+
+            // Save what was spoken to memory (use format that won't confuse LLM)
+            await this.memory.addMessage('assistant', `(语音消息已发送: ${textToSpeak.substring(0, 50)}...)`);
           }
-
-          // No longer truncating voice messages - let them play in full
-          console.log(`[Agent] Voice message length: ${textToSpeak.length} chars`);
-
-          console.log(`[Agent] Sending voice message: "${textToSpeak.substring(0, 50)}..."`);
-          await sendVoiceMessage(textToSpeak);
-          voiceMessageSent = true;
-
-          // Save what was spoken to memory (use format that won't confuse LLM)
-          await this.memory.addMessage('assistant', `(语音消息已发送: ${textToSpeak.substring(0, 50)}...)`);
         }
       }
       response = response.replace(voiceMsgRegex, '').trim();
