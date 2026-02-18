@@ -232,9 +232,10 @@ export class RealtimeVoiceSystem {
       channels: '1',
       punctuate: 'true',
       interim_results: 'true',
-      utterance_end_ms: '1500',  // Increased from 1000 to 1500 for more natural pauses
+      utterance_end_ms: '2000',  // Wait longer for natural pauses (was 1500)
       vad_events: 'true',
-      endpointing: '500'  // Minimum silence before considering speech ended
+      endpointing: '800',  // More silence needed before considering speech ended (was 500)
+      smart_format: 'true'  // Better formatting for Chinese
     }).toString();
 
     session.deepgramWs = new WebSocket(url, {
@@ -249,45 +250,43 @@ export class RealtimeVoiceSystem {
       try {
         const response = JSON.parse(data.toString());
 
-        // Barge-in: Deepgram detects user started speaking while agent is talking
-        if (response.type === 'SpeechStarted') {
-          if (session.isSpeaking) {
-            // Anti-echo guard: Ignore SpeechStarted in the first 1.5s of TTS playback
-            // and require at least 8000 bytes sent (~1 sec of 8kHz mulaw audio).
-            // Without this, Twilio's echo of the TTS audio triggers immediate false barge-in.
-            const playbackElapsed = Date.now() - session.ttsStartTime;
-            const MIN_PLAYBACK_MS = 1500;  // 1.5 seconds
-            const MIN_BYTES_SENT = 8000;   // ~1 second of 8kHz mulaw
-
-            if (playbackElapsed < MIN_PLAYBACK_MS || session.bytesSent < MIN_BYTES_SENT) {
-              console.log(`[Barge-in] Ignoring SpeechStarted (echo guard): ${playbackElapsed}ms elapsed, ${session.bytesSent} bytes sent`);
-              return;
-            }
-
-            console.log('[Barge-in] User started speaking! Stopping playback.');
-            session.interrupted = true;
-
-            // Calculate what the user actually heard
-            const heardRatio = session.totalBytes > 0
-              ? session.bytesSent / session.totalBytes
-              : 0;
-            const heardText = session.spokenText.substring(
-              0, Math.floor(session.spokenText.length * heardRatio)
-            );
-            session.lastInterruptContext = heardText;
-            console.log(`[Barge-in] User heard ~${Math.round(heardRatio * 100)}%: "${heardText.substring(0, 50)}..."`);
-
-            this.stopPlayback(session);
-          }
-          return;
-        }
+        // We no longer use SpeechStarted for barge-in because it triggers on
+        // echo and background noise. Instead, barge-in is triggered by actual
+        // final transcripts (real recognized words) during TTS playback.
 
         if (response.type === 'Results') {
           const transcript = response.channel?.alternatives?.[0]?.transcript;
           const isFinal = response.is_final;
 
           if (transcript && isFinal) {
-            // Accumulate final transcripts instead of processing immediately
+            // Barge-in: If agent is speaking and we get a real transcript,
+            // that means the user is actually talking (not just noise/echo)
+            if (session.isSpeaking && !session.interrupted) {
+              // Anti-echo guard: still need minimum playback time
+              const playbackElapsed = Date.now() - session.ttsStartTime;
+              const MIN_PLAYBACK_MS = 2000;  // 2 seconds minimum
+
+              if (playbackElapsed >= MIN_PLAYBACK_MS) {
+                console.log(`[Barge-in] Real speech detected during TTS: "${transcript}"`);
+                session.interrupted = true;
+
+                // Calculate what the user actually heard
+                const heardRatio = session.totalBytes > 0
+                  ? session.bytesSent / session.totalBytes
+                  : 0;
+                const heardText = session.spokenText.substring(
+                  0, Math.floor(session.spokenText.length * heardRatio)
+                );
+                session.lastInterruptContext = heardText;
+                console.log(`[Barge-in] User heard ~${Math.round(heardRatio * 100)}%: "${heardText.substring(0, 50)}..."`);
+
+                this.stopPlayback(session);
+              } else {
+                console.log(`[Barge-in] Ignoring transcript during echo window: ${playbackElapsed}ms elapsed`);
+              }
+            }
+
+            // Accumulate final transcripts
             accumulatedTranscript += transcript;
             console.log(`[RealtimeVoice] Final: "${transcript}" (Accumulated: "${accumulatedTranscript}")`);
           } else if (transcript) {
