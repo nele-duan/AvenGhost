@@ -93,9 +93,16 @@ export class Agent {
     sendSticker?: (fileId: string) => Promise<void>,
     sendCall?: (text: string) => Promise<void>,
     disableTools: boolean = false,
-    sendVoiceMessage?: (text: string) => Promise<void>
+    sendVoiceMessage?: (text: string) => Promise<void>,
+    imageUrls?: string[]
   ): Promise<void> {
-    console.log(`[Agent] Processing message from ${userId}: ${message}`);
+    // Prepend image context hint when user sends photos
+    if (imageUrls?.length) {
+      message = `[User sent ${imageUrls.length} image(s)] ${message || '(no caption)'}`;
+      console.log(`[Agent] Processing message with ${imageUrls.length} image(s) from ${userId}`);
+    } else {
+      console.log(`[Agent] Processing message from ${userId}: ${message}`);
+    }
     const fs = require('fs-extra');
     const path = require('path');
 
@@ -368,7 +375,11 @@ GIT PROTOCOL (SAFETY FIRST):
 
       // Chat with LLM
       // Voice mode: limit tokens for faster response
-      const llmOptions = disableTools ? { maxTokens: 150 } : undefined;
+      // Only pass imageUrls on the first turn (when the user's images are fresh)
+      const currentImageUrls = turnCount === 1 ? imageUrls : undefined;
+      const llmOptions = disableTools
+        ? { maxTokens: 150, imageUrls: currentImageUrls }
+        : { imageUrls: currentImageUrls };
       let response = await this.llm.chat(systemInstruction, finalPayload, llmOptions);
       response = response ? response.trim() : "";
 

@@ -28,13 +28,24 @@ export class LLM {
     });
   }
 
-  async chat(systemPrompt: string, userMessage: string, options?: { maxTokens?: number }): Promise<string> {
+  async chat(systemPrompt: string, userMessage: string, options?: { maxTokens?: number; imageUrls?: string[] }): Promise<string> {
     try {
+      // Build user content: multimodal array when images are present, plain string otherwise
+      const userContent: any = options?.imageUrls?.length
+        ? [
+          { type: 'text' as const, text: userMessage },
+          ...options.imageUrls.map(url => ({
+            type: 'image_url' as const,
+            image_url: { url }
+          }))
+        ]
+        : userMessage;
+
       const response = await this.client.chat.completions.create({
         model: this.config.model,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage }
+          { role: 'user', content: userContent }
         ],
         temperature: this.config.temperature,
         max_tokens: options?.maxTokens ?? this.config.maxTokens,
