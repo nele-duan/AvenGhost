@@ -98,8 +98,10 @@ export async function getHealthContext(): Promise<string> {
     const health: HealthStatus = await fs.readJson(HEALTH_DATA_PATH);
     const dataAge = Date.now() - new Date(health.receivedAt || '').getTime();
 
-    // Only use if data is fresh (< 10 minutes old)
-    if (dataAge > 10 * 60 * 1000) {
+    // Only use if data is reasonably fresh (< 6 hours old)
+    // Note: iOS AvenBridge syncs periodically, and heartbeat checks every 4 hours.
+    // Previous 10-minute threshold was too strict — health data was almost always discarded.
+    if (dataAge > 6 * 60 * 60 * 1000) {
       return ''; // Stale data
     }
 
