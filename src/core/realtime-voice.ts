@@ -43,6 +43,13 @@ interface CallSession {
   pendingText: string;
   twilioWs: WebSocket;
   initialGreeting?: string;  // Initial greeting to play when stream starts
+  // Barge-in support
+  isSpeaking: boolean;       // Agent is currently sending TTS audio chunks
+  interrupted: boolean;      // Was the last TTS interrupted by user?
+  spokenText: string;        // Full text being spoken by TTS
+  bytesSent: number;         // Audio bytes sent before interrupt
+  totalBytes: number;        // Total audio bytes for current TTS
+  lastInterruptContext: string; // Context about what user heard before interrupt
 }
 
 export class RealtimeVoiceSystem {
@@ -140,7 +147,14 @@ export class RealtimeVoiceSystem {
                 isPlaying: false,
                 pendingText: '',
                 twilioWs: ws,
-                initialGreeting: msg.start?.customParameters?.greeting
+                initialGreeting: msg.start?.customParameters?.greeting,
+                // Barge-in state
+                isSpeaking: false,
+                interrupted: false,
+                spokenText: '',
+                bytesSent: 0,
+                totalBytes: 0,
+                lastInterruptContext: ''
               };
               this.sessions.set(msg.start!.streamSid, session);
 
@@ -155,13 +169,9 @@ export class RealtimeVoiceSystem {
 
             case 'media':
               if (session && msg.media?.payload) {
-                // Forward audio to Deepgram
+                // Forward audio to Deepgram for STT + VAD
+                // Barge-in detection is now handled by Deepgram's SpeechStarted event
                 this.forwardToDeepgram(session, msg.media.payload);
-
-                // NOTE: Barge-in detection disabled for now
-                // The current implementation triggers on ANY audio (including echo/noise)
-                // Proper barge-in requires VAD (Voice Activity Detection) from Deepgram
-                // which we can implement later using the 'speech_final' events
               }
               break;
 
@@ -237,6 +247,27 @@ export class RealtimeVoiceSystem {
       try {
         const response = JSON.parse(data.toString());
 
+        // Barge-in: Deepgram detects user started speaking while agent is talking
+        if (response.type === 'SpeechStarted') {
+          if (session.isSpeaking) {
+            console.log('[Barge-in] User started speaking! Stopping playback.');
+            session.interrupted = true;
+
+            // Calculate what the user actually heard
+            const heardRatio = session.totalBytes > 0
+              ? session.bytesSent / session.totalBytes
+              : 0;
+            const heardText = session.spokenText.substring(
+              0, Math.floor(session.spokenText.length * heardRatio)
+            );
+            session.lastInterruptContext = heardText;
+            console.log(`[Barge-in] User heard ~${Math.round(heardRatio * 100)}%: "${heardText.substring(0, 50)}..."`);
+
+            this.stopPlayback(session);
+          }
+          return;
+        }
+
         if (response.type === 'Results') {
           const transcript = response.channel?.alternatives?.[0]?.transcript;
           const isFinal = response.is_final;
@@ -253,8 +284,18 @@ export class RealtimeVoiceSystem {
           console.log(`[RealtimeVoice] Utterance end - Processing: "${accumulatedTranscript}"`);
 
           if (accumulatedTranscript.trim() && this.speechHandler) {
-            const textToProcess = accumulatedTranscript.trim();
+            let textToProcess = accumulatedTranscript.trim();
             accumulatedTranscript = '';  // Reset for next utterance
+
+            // If previous TTS was interrupted, prepend barge-in context
+            if (session.lastInterruptContext) {
+              const bargeInCtx = `[SYSTEM: Your previous speech was INTERRUPTED by the user. ` +
+                `They only heard: "${session.lastInterruptContext}". ` +
+                `They did NOT hear the rest. The user then said:]`;
+              textToProcess = `${bargeInCtx}\n${textToProcess}`;
+              session.lastInterruptContext = '';  // Reset after use
+              console.log(`[Barge-in] Injected interrupt context into next message`);
+            }
 
             const reply = await this.speechHandler(textToProcess, '');
             if (reply) {
@@ -303,7 +344,14 @@ export class RealtimeVoiceSystem {
 
     const modelId = process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2';
     console.log(`[RealtimeVoice] TTS: "${text.substring(0, 30)}..." (Voice: ${voiceId}, Model: ${modelId})`);
+
+    // Set barge-in tracking state
     session.isPlaying = true;
+    session.isSpeaking = true;
+    session.interrupted = false;
+    session.spokenText = text;
+    session.bytesSent = 0;
+    session.totalBytes = 0;
 
     try {
       // Use REST API with streaming response
@@ -327,22 +375,40 @@ export class RealtimeVoiceSystem {
         responseType: 'arraybuffer'
       });
 
-      // Convert to base64 and send to Twilio
-      const audioBase64 = Buffer.from(response.data).toString('base64');
+      // Work with raw audio buffer for accurate byte tracking
+      const rawAudio = Buffer.from(response.data);
+      session.totalBytes = rawAudio.length;
 
-      // Send in chunks to Twilio (Twilio expects ~20ms chunks = 160 bytes for 8kHz mulaw)
+      // Send in chunks with real-time pacing (interruptible)
+      // Each chunk = 160 bytes = 20ms of 8kHz mulaw audio
       const chunkSize = 160;
-      for (let i = 0; i < audioBase64.length; i += chunkSize) {
-        const chunk = audioBase64.slice(i, i + chunkSize);
-        this.sendAudioToTwilio(session, chunk);
+      for (let i = 0; i < rawAudio.length; i += chunkSize) {
+        // Check for barge-in interrupt before sending each chunk
+        if (session.interrupted) {
+          console.log(`[Barge-in] TTS interrupted at byte ${session.bytesSent}/${session.totalBytes} (${Math.round(session.bytesSent / session.totalBytes * 100)}%)`);
+          break;
+        }
+
+        const chunk = rawAudio.slice(i, i + chunkSize);
+        this.sendAudioToTwilio(session, chunk.toString('base64'));
+        session.bytesSent = i + chunk.length;
+
+        // Real-time pacing: ~18ms delay per 20ms chunk
+        // This allows barge-in detection between chunks
+        await new Promise(r => setTimeout(r, 18));
       }
 
-      console.log('[RealtimeVoice] TTS complete');
+      if (!session.interrupted) {
+        console.log('[RealtimeVoice] TTS complete (uninterrupted)');
+      }
+
       session.isPlaying = false;
+      session.isSpeaking = false;
 
     } catch (e: any) {
       console.error('[RealtimeVoice] TTS failed:', e.response?.data || e.message);
       session.isPlaying = false;
+      session.isSpeaking = false;
     }
   }
 
