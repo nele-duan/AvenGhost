@@ -38,14 +38,14 @@ export class HeartbeatSystem {
     const now = new Date();
     const hour = now.getHours();
 
-    // 1. Time Window Override: Only active 09:00 - 22:00
-    if (hour < 9 || hour > 22) {
+    // 1. Time Window Override: Only active 09:00 - 21:00
+    if (hour < 9 || hour >= 21) {
       return;
     }
 
-    // 2. Interval Check: Approx every 2 hours (with slight jitter for natural feel)
+    // 2. Interval Check: Approx every 4 hours (with slight jitter for natural feel)
     const elapsed = now.getTime() - this.lastTriggerTime;
-    const targetInterval = 2 * 60 * 60 * 1000; // 2 hours
+    const targetInterval = 4 * 60 * 60 * 1000; // 4 hours
     const jitter = (Math.random() * 30 - 15) * 60 * 1000; // +/- 15 mins jitter
 
     if (elapsed < (targetInterval + jitter)) {
@@ -70,7 +70,7 @@ export class HeartbeatSystem {
 
     const prompt = `[SYSTEM EVENT: TIME PASSAGE]
 It is now ${now.toISOString()}. 
-You have not spoken to the user in a while (Automatic 2-hour check). 
+You have not spoken to the user in a while (Automatic 4-hour check). 
 
 ${healthContext ? `CURRENT BIOMETRIC STATUS FROM APPLE WATCH:
 ${healthContext}

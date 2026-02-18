@@ -110,6 +110,51 @@ async function main() {
     return replyText.trim();
   });
 
+  // Handle Photo (Vision - user sends image for agent to see)
+  bot.on('photo', async (ctx) => {
+    const userId = ctx.from.id.toString();
+    latestActiveUserId = userId;
+
+    // Get highest resolution photo (last in array)
+    const photos = ctx.message.photo;
+    const bestPhoto = photos[photos.length - 1];
+    const caption = (ctx.message as any).caption || '';
+
+    ctx.sendChatAction('typing');
+
+    try {
+      // Get file URL from Telegram
+      const fileLink = await ctx.telegram.getFileLink(bestPhoto.file_id);
+      const imageUrl = fileLink.toString();
+      console.log(`[Photo] Received image from ${userId}, URL: ${imageUrl}, Caption: "${caption}"`);
+
+      // Reuse same callbacks as text handler
+      const VALID_REACTIONS = ['👍', '👎', '❤️', '🔥', '🥰', '👏', '😁', '🤔', '🤯', '😱', '🤬', '😢', '🎉', '🤩', '🤮', '💩', '🙏', '🕊️', '🤡', '🥱', '🥴', '😍', '🐳', '❤️‍🔥', '🌭', '💯', '🤣', '⚡️', '🍌', '🏆', '💔', '🤨', '😐', '🍓', '🍾', '💋', '🖕', '😈', '😴', '😭', '🤓', '👻', '👨‍💻', '👀', '🎃', '🙈', '😇', '😨', '🤝', '✍️', '🤗', '🫡', '🎅', '🎄', '☃️', '💅', '🤪', '🗿', '🆒', '💘', '🙉', '🦄', '😘', '💊', '🙊', '😎', '👾', '🤷‍♂️', '🤷', '🤷‍♀️', '😡'];
+      const reactCallback = async (emoji: string) => {
+        if (!VALID_REACTIONS.includes(emoji)) return;
+        try { await ctx.react(emoji as any); } catch (e) { console.error(`[Reaction] Failed: ${emoji}`, e); }
+      };
+      const imageCallback = async (url: string, cap?: string) => { try { await ctx.replyWithPhoto(url, { caption: cap }); } catch (e) { await ctx.reply(`[Image Failed: ${url}]`); } };
+      const stickerCallback = async (fid: string) => { try { await ctx.replyWithSticker(fid); } catch (e) { console.error(e); } };
+      const sendReply = async (text: string, mode: 'Markdown' | 'HTML' = 'Markdown') => { if (text?.trim()) try { await ctx.reply(text, { parse_mode: mode }); } catch (e) { await ctx.reply(text); } };
+      const callCallback = async (text: string) => {
+        try {
+          await ctx.reply(`(Initiating call... 📞)`);
+          await voiceSystem.makeCall(text);
+        } catch (e: any) {
+          console.error('Call failed', e);
+          await ctx.reply(`[Call Failed: ${e.message}]`);
+        }
+      };
+
+      // Pass imageUrls to agent so LLM can "see" the photo
+      await agent.processMessage(userId, caption, sendReply, reactCallback, imageCallback, stickerCallback, callCallback, false, undefined, [imageUrl]);
+    } catch (e) {
+      console.error('Error processing photo:', e);
+      await ctx.reply('... 图片处理出错了 ...');
+    }
+  });
+
   // Handle Sticker
   bot.on('sticker', async (ctx) => {
     const userId = ctx.from.id.toString();
