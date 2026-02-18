@@ -50,6 +50,7 @@ interface CallSession {
   bytesSent: number;         // Audio bytes sent before interrupt
   totalBytes: number;        // Total audio bytes for current TTS
   lastInterruptContext: string; // Context about what user heard before interrupt
+  ttsStartTime: number;      // Timestamp when TTS chunk sending started
 }
 
 export class RealtimeVoiceSystem {
@@ -154,7 +155,8 @@ export class RealtimeVoiceSystem {
                 spokenText: '',
                 bytesSent: 0,
                 totalBytes: 0,
-                lastInterruptContext: ''
+                lastInterruptContext: '',
+                ttsStartTime: 0
               };
               this.sessions.set(msg.start!.streamSid, session);
 
@@ -250,6 +252,18 @@ export class RealtimeVoiceSystem {
         // Barge-in: Deepgram detects user started speaking while agent is talking
         if (response.type === 'SpeechStarted') {
           if (session.isSpeaking) {
+            // Anti-echo guard: Ignore SpeechStarted in the first 1.5s of TTS playback
+            // and require at least 8000 bytes sent (~1 sec of 8kHz mulaw audio).
+            // Without this, Twilio's echo of the TTS audio triggers immediate false barge-in.
+            const playbackElapsed = Date.now() - session.ttsStartTime;
+            const MIN_PLAYBACK_MS = 1500;  // 1.5 seconds
+            const MIN_BYTES_SENT = 8000;   // ~1 second of 8kHz mulaw
+
+            if (playbackElapsed < MIN_PLAYBACK_MS || session.bytesSent < MIN_BYTES_SENT) {
+              console.log(`[Barge-in] Ignoring SpeechStarted (echo guard): ${playbackElapsed}ms elapsed, ${session.bytesSent} bytes sent`);
+              return;
+            }
+
             console.log('[Barge-in] User started speaking! Stopping playback.');
             session.interrupted = true;
 
@@ -378,6 +392,7 @@ export class RealtimeVoiceSystem {
       // Work with raw audio buffer for accurate byte tracking
       const rawAudio = Buffer.from(response.data);
       session.totalBytes = rawAudio.length;
+      session.ttsStartTime = Date.now();  // Mark when we start sending audio (for echo guard)
 
       // Send in chunks with real-time pacing (interruptible)
       // Each chunk = 160 bytes = 20ms of 8kHz mulaw audio
